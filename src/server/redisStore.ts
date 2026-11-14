@@ -8,7 +8,10 @@ import {
 } from '../shared/constants';
 import type {
   DailyState,
+  LeaderboardEntry,
+  LeaderboardResponse,
   PlayerProfile,
+  RareFeat,
   SubmitAttemptResponse,
 } from '../shared/api';
 
@@ -29,6 +32,16 @@ function dailyKey(playerKey: string, utcDate: string): string {
   return `user:${playerKey}:day:${utcDate}`;
 }
 
+function parseFeats(raw?: string): RareFeat[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as RareFeat[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getPlayerProfile(
   playerKey: string,
   username: string,
@@ -40,6 +53,7 @@ export async function getPlayerProfile(
   const title = getTitleForLevel(level);
   const streak = data.streak ? parseInt(data.streak, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
+  const feats = parseFeats(data.feats);
 
   return {
     username,
@@ -49,6 +63,7 @@ export async function getPlayerProfile(
     title,
     streak,
     lastPlayedDate,
+    feats,
   };
 }
 
@@ -70,11 +85,24 @@ export async function getDailyState(
   };
 }
 
+export async function unlockFeatIfNew(
+  playerKey: string,
+  feat: RareFeat
+): Promise<boolean> {
+  const pKey = profileKey(playerKey);
+  const raw = await redis.hGet(pKey, 'feats');
+  const feats = parseFeats(raw);
+  if (feats.includes(feat)) return false;
+  feats.push(feat);
+  await redis.hSet(pKey, { feats: JSON.stringify(feats) });
+  return true;
+}
+
 export async function commitRoll(
   playerKey: string,
   roll: number,
   isReroll: boolean
-): Promise<DailyState> {
+): Promise<{ daily: DailyState; unlockedFeat: RareFeat | null }> {
   const clamped = Math.max(1, Math.min(20, Math.round(roll)));
   const utcDate = getUtcDateKey();
   const key = dailyKey(playerKey, utcDate);
@@ -82,29 +110,37 @@ export async function commitRoll(
 
   if (!isReroll) {
     if (current.initialRoll !== null) {
-      return current;
+      return { daily: current, unlockedFeat: null };
     }
     await redis.hSet(key, {
       initialRoll: String(clamped),
       finalRoll: String(clamped),
       rerollUsed: '0',
     });
-    return await getDailyState(playerKey, utcDate);
+  } else {
+    if (current.initialRoll === null) {
+      throw new Error('Must make an initial roll before rerolling');
+    }
+    if (current.rerollUsed) {
+      throw new Error('Daily reroll has already been used');
+    }
+    await redis.hSet(key, {
+      reroll: String(clamped),
+      finalRoll: String(clamped),
+      rerollUsed: '1',
+    });
   }
 
-  if (current.initialRoll === null) {
-    throw new Error('Must make an initial roll before rerolling');
-  }
-  if (current.rerollUsed) {
-    throw new Error('Daily reroll has already been used');
+  let unlockedFeat: RareFeat | null = null;
+  if (clamped === 20) {
+    const isNew = await unlockFeatIfNew(playerKey, 'nat20');
+    if (isNew) unlockedFeat = 'nat20';
   }
 
-  await redis.hSet(key, {
-    reroll: String(clamped),
-    finalRoll: String(clamped),
-    rerollUsed: '1',
-  });
-  return await getDailyState(playerKey, utcDate);
+  return {
+    daily: await getDailyState(playerKey, utcDate),
+    unlockedFeat,
+  };
 }
 
 export async function submitAttempt(
@@ -154,6 +190,16 @@ export async function submitAttempt(
     newLastPlayedDate = utcDate;
   }
 
+  const nextFeats = [...profile.feats];
+  let unlockedFeat: RareFeat | null = null;
+  if (passed && daily.finalRoll === 1 && !nextFeats.includes('nat1_clear')) {
+    nextFeats.push('nat1_clear');
+    unlockedFeat = 'nat1_clear';
+  } else if (newStreak >= 30 && !nextFeats.includes('streak30')) {
+    nextFeats.push('streak30');
+    unlockedFeat = 'streak30';
+  }
+
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       attemptsCount: String(newAttemptsCount),
@@ -168,6 +214,7 @@ export async function submitAttempt(
       title: newTitle,
       streak: String(newStreak),
       lastPlayedDate: newLastPlayedDate ?? '',
+      feats: JSON.stringify(nextFeats),
     }),
   ];
 
@@ -187,6 +234,7 @@ export async function submitAttempt(
     xpEarned,
     leveledUp,
     previousLevel,
+    unlockedFeat,
     profile: {
       username,
       isAnonymous,
@@ -195,6 +243,7 @@ export async function submitAttempt(
       title: newTitle,
       streak: newStreak,
       lastPlayedDate: newLastPlayedDate,
+      feats: nextFeats,
     },
     daily: {
       ...daily,
@@ -203,5 +252,57 @@ export async function submitAttempt(
       bestAccuracy: newBestAccuracy,
       todayXp: newTodayXp,
     },
+  };
+}
+
+async function fetchSingleBoard(
+  zsetKey: string,
+  username: string,
+  isAnonymous: boolean
+): Promise<{
+  top: LeaderboardEntry[];
+  myRank: number | null;
+  myScore: number;
+}> {
+  const [rawTop, totalCount, ascRank, score] = await Promise.all([
+    redis.zRange(zsetKey, 0, 9, { by: 'rank', reverse: true }),
+    redis.zCard(zsetKey),
+    isAnonymous ? Promise.resolve(undefined) : redis.zRank(zsetKey, username),
+    isAnonymous ? Promise.resolve(undefined) : redis.zScore(zsetKey, username),
+  ]);
+
+  const top: LeaderboardEntry[] = rawTop.map((entry, idx) => ({
+    rank: idx + 1,
+    username: entry.member,
+    score: entry.score,
+  }));
+
+  const myRank =
+    ascRank !== undefined && ascRank !== null
+      ? Math.max(1, totalCount - ascRank)
+      : null;
+
+  return {
+    top,
+    myRank,
+    myScore: score ?? 0,
+  };
+}
+
+export async function getLeaderboards(
+  username: string,
+  isAnonymous: boolean
+): Promise<LeaderboardResponse> {
+  const utcDate = getUtcDateKey();
+  const [daily, allTime] = await Promise.all([
+    fetchSingleBoard(`lb:xp:daily:${utcDate}`, username, isAnonymous),
+    fetchSingleBoard('lb:xp:alltime', username, isAnonymous),
+  ]);
+
+  return {
+    type: 'leaderboard',
+    utcDate,
+    daily,
+    allTime,
   };
 }

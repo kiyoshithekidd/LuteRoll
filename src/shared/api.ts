@@ -1,3 +1,5 @@
+export type RareFeat = 'nat20' | 'nat1_clear' | 'streak30';
+
 export type PlayerProfile = {
   username: string;
   isAnonymous: boolean;
@@ -6,6 +8,7 @@ export type PlayerProfile = {
   title: string;
   streak: number;
   lastPlayedDate: string | null;
+  feats: RareFeat[];
 };
 
 export type DailyState = {
@@ -35,6 +38,7 @@ export type CommitRollRequest = {
 export type CommitRollResponse = {
   type: 'roll';
   daily: DailyState;
+  unlockedFeat: RareFeat | null;
 };
 
 export type SubmitAttemptRequest = {
@@ -48,8 +52,30 @@ export type SubmitAttemptResponse = {
   xpEarned: number;
   leveledUp: boolean;
   previousLevel: number;
+  unlockedFeat: RareFeat | null;
   profile: PlayerProfile;
   daily: DailyState;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  username: string;
+  score: number;
+};
+
+export type LeaderboardResponse = {
+  type: 'leaderboard';
+  utcDate: string;
+  daily: {
+    top: LeaderboardEntry[];
+    myRank: number | null;
+    myScore: number;
+  };
+  allTime: {
+    top: LeaderboardEntry[];
+    myRank: number | null;
+    myScore: number;
+  };
 };
 
 export type ErrorResponse = {

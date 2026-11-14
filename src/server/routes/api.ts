@@ -10,9 +10,11 @@ import type {
 import {
   commitRoll,
   getDailyState,
+  getLeaderboards,
   getPlayerProfile,
   submitAttempt,
 } from '../redisStore';
+import { syncBardUserFlair } from '../flairService';
 
 export const api = new Hono();
 
@@ -86,15 +88,25 @@ api.post('/roll', async (c) => {
     }
 
     const player = await resolvePlayer();
-    const daily = await commitRoll(
+    const { daily, unlockedFeat } = await commitRoll(
       player.playerKey,
       body.roll,
       Boolean(body.isReroll)
     );
 
+    if (unlockedFeat) {
+      const profile = await getPlayerProfile(
+        player.playerKey,
+        player.username,
+        player.isAnonymous
+      );
+      await syncBardUserFlair(profile);
+    }
+
     return c.json<CommitRollResponse>({
       type: 'roll',
       daily,
+      unlockedFeat,
     });
   } catch (error) {
     const message =
@@ -133,10 +145,26 @@ api.post('/attempt', async (c) => {
       body.accuracy
     );
 
+    if (result.passed) {
+      await syncBardUserFlair(result.profile);
+    }
+
     return c.json(result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to record attempt';
     return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.get('/leaderboard', async (c) => {
+  try {
+    const player = await resolvePlayer();
+    const board = await getLeaderboards(player.username, player.isAnonymous);
+    return c.json(board);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to load leaderboards';
+    return c.json<ErrorResponse>({ status: 'error', message }, 500);
   }
 });

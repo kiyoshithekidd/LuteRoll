@@ -1,6 +1,13 @@
 import './index.css';
 
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import type {
   CommitRollResponse,
@@ -10,11 +17,22 @@ import type {
 import {
   FAIL_ACCURACY_THRESHOLD,
   getTierForRoll,
+  xpRequiredForLevel,
 } from '../shared/constants';
 import { generateMelody } from '../shared/melodyGenerator';
+import streakFlameUrl from './assets/streak-flame.webp';
+import bountySealUrl from './assets/bounty-seal.webp';
 import { soundEngine } from './audio/soundEngine';
 import { DiceTray3D } from './components/DiceTray3D';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
+import { LeaderboardModal } from './components/LeaderboardModal';
+import { ResultCard } from './components/ResultCard';
+import {
+  trackAppReady,
+  trackJourneyEnd,
+  trackJourneyProgress,
+  trackJourneyStart,
+} from './telemetry';
 
 type Phase = 'LOADING' | 'ROLL' | 'LISTEN' | 'PLAY' | 'RESULTS';
 
@@ -29,6 +47,7 @@ export const Game = () => {
   const [state, setState] = useState<StateResponse | null>(null);
   const [phase, setPhase] = useState<Phase>('LOADING');
   const [muted, setMuted] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 3D Dice Tray state
@@ -63,6 +82,7 @@ export const Game = () => {
   }, []);
 
   useEffect(() => {
+    trackAppReady();
     let active = true;
     fetch('/api/state')
       .then((res) =>
@@ -103,6 +123,7 @@ export const Game = () => {
 
   const handleTriggerRoll = (reroll: boolean) => {
     soundEngine.unlock();
+    trackJourneyStart();
     setError(null);
     setIsRerollPending(reroll);
     setIsRolling(true);
@@ -117,6 +138,8 @@ export const Game = () => {
       else if (value === 1) soundEngine.playLowDrum();
       else soundEngine.playNote(67, 260);
 
+      trackJourneyProgress(0.3, `rolled_${value}`);
+
       try {
         const res = await fetch('/api/roll', {
           method: 'POST',
@@ -128,7 +151,22 @@ export const Game = () => {
           throw new Error(errData.message ?? 'Roll failed');
         }
         const data = (await res.json()) as CommitRollResponse;
-        setState((prev) => (prev ? { ...prev, daily: data.daily } : prev));
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                daily: data.daily,
+                profile:
+                  data.unlockedFeat &&
+                  !prev.profile.feats.includes(data.unlockedFeat)
+                    ? {
+                        ...prev.profile,
+                        feats: [...prev.profile.feats, data.unlockedFeat],
+                      }
+                    : prev.profile,
+              }
+            : prev
+        );
         setPhase('LISTEN');
       } catch (err) {
         setError(
@@ -144,6 +182,7 @@ export const Game = () => {
     soundEngine.unlock();
     clearDemoTimers();
     setIsPlayingDemo(true);
+    trackJourneyProgress(0.55, 'listen_melody');
 
     melody.notes.forEach((midi, idx) => {
       const startAt = idx * melody.tempoMs;
@@ -166,6 +205,7 @@ export const Game = () => {
 
   const startAttempt = () => {
     soundEngine.unlock();
+    trackJourneyStart();
     clearDemoTimers();
     setPlayIdx(0);
     setCorrectCount(0);
@@ -195,6 +235,8 @@ export const Game = () => {
             }
           : prev
       );
+      trackJourneyEnd(data.passed, data.xpEarned);
+
       if (!data.passed) {
         setHeckle(
           HECKLE_LINES[Math.floor(Math.random() * HECKLE_LINES.length)]!
@@ -246,39 +288,85 @@ export const Game = () => {
   const finalRoll = state?.daily.finalRoll ?? null;
   const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
 
+  // XP progress bar calculation
+  const level = state?.profile.level ?? 1;
+  const totalXp = state?.profile.totalXp ?? 0;
+  const currLevelXp = xpRequiredForLevel(level);
+  const nextLevelXp = xpRequiredForLevel(level + 1);
+  const levelProgressPct =
+    nextLevelXp > currLevelXp
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            ((totalXp - currLevelXp) / (nextLevelXp - currLevelXp)) * 100
+          )
+        )
+      : 100;
+
   return (
-    <div className="tavern-felt-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-3">
+    <div className="tavern-stage-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-2.5">
       {/* Top Tavern HUD */}
-      <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
-            Lute Roll
-          </h1>
-          <p className="text-[11px] sm:text-xs text-[#f5ead2]/80 truncate">
-            {state
-              ? `${state.profile.username} • Lvl ${state.profile.level} ${state.profile.title} • ${state.profile.totalXp} XP`
-              : 'Entering the tavern...'}
-          </p>
+      <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
+              Lute Roll
+            </h1>
+            <p className="text-[11px] sm:text-xs text-[#f5ead2]/85 truncate">
+              {state
+                ? `${state.profile.username} • Lvl ${level} ${state.profile.title}`
+                : 'Entering the tavern...'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {state && state.profile.streak > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-black/45 border border-amber-400/40 text-amber-200">
+                <img
+                  src={streakFlameUrl}
+                  alt="Streak"
+                  className="w-3.5 h-3.5 object-contain"
+                />
+                {state.profile.streak}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowLeaderboard(true)}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
+              aria-label="Open leaderboards"
+            >
+              🏆 Ranks
+            </button>
+            <button
+              type="button"
+              onClick={toggleMute}
+              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
+              aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+            >
+              {muted ? '🔇' : '🔊'}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {state && state.profile.streak > 0 && (
-            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 border border-amber-500/40 text-amber-300">
-              🔥 {state.profile.streak}
+
+        {/* XP Bar */}
+        {state && (
+          <div className="flex items-center gap-2 text-[10px] text-[#ffe875]/80">
+            <div className="flex-1 h-1.5 rounded-full bg-black/50 overflow-hidden border border-[#d4af37]/25">
+              <div
+                className="h-full bg-gradient-to-r from-[#d4af37] to-[#fff099] transition-all duration-300"
+                style={{ width: `${levelProgressPct}%` }}
+              />
+            </div>
+            <span className="shrink-0 font-semibold">
+              {totalXp} / {nextLevelXp} XP
             </span>
-          )}
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="text-xs px-2.5 py-1.5 rounded-lg bg-black/40 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
-            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-          >
-            {muted ? '🔇 Muted' : '🔊 Sound'}
-          </button>
-        </div>
+          </div>
+        )}
       </header>
 
       {error && (
-        <div className="w-full max-w-lg mx-auto text-xs text-red-200 bg-red-950/75 border border-red-500/50 rounded-xl px-3 py-2 text-center">
+        <div className="w-full max-w-lg mx-auto text-xs text-red-200 bg-red-950/80 border border-red-500/50 rounded-xl px-3 py-2 text-center">
           {error}
         </div>
       )}
@@ -286,7 +374,7 @@ export const Game = () => {
       {/* Main Stage */}
       <main className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto">
         {phase === 'LOADING' && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-6 text-center text-sm text-[#f5ead2]/80">
+          <div className="tavern-wood-frame w-full rounded-2xl p-6 text-center text-sm text-[#f5ead2]/85">
             Tuning the lute strings...
           </div>
         )}
@@ -297,7 +385,7 @@ export const Game = () => {
               <h2 className="font-serif text-xl font-bold text-[#ffe875]">
                 {isRerollPending ? 'Daily Reroll' : "Roll Today's d20"}
               </h2>
-              <p className="text-xs text-[#f5ead2]/75 mt-0.5">
+              <p className="text-xs text-[#f5ead2]/80 mt-0.5">
                 High roll = easier tune • Nat 20 = 3.0x crit payout • Nat 1 =
                 Brutal 3.0x
               </p>
@@ -309,11 +397,11 @@ export const Game = () => {
                 onSettled={(v) => void handleDiceSettled(v)}
               />
             ) : (
-              <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#5a3a1e] flex flex-col items-center justify-center gap-2 shadow-inner">
-                <span className="font-serif text-5xl font-bold text-[#ffe875]/90">
+              <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex flex-col items-center justify-center gap-2 shadow-inner">
+                <span className="font-serif text-5xl font-bold text-[#ffe875] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
                   d20
                 </span>
-                <span className="text-xs text-[#f5ead2]/70">
+                <span className="text-xs text-[#f5ead2]/80">
                   Tap below to toss the gold die onto the felt
                 </span>
               </div>
@@ -331,18 +419,18 @@ export const Game = () => {
         )}
 
         {phase === 'LISTEN' && melody && tier && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ffe875] text-[#1c1208]">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ffe875] text-[#1c1208] shadow">
                     Rolled {finalRoll}
                   </span>
                   <span className="text-sm font-bold text-[#ffe875]">
                     {tier.name} • {tier.xpMultiplier}x XP
                   </span>
                 </div>
-                <p className="text-xs text-[#f5ead2]/75 mt-1">
+                <p className="text-xs text-[#f5ead2]/80 mt-1">
                   {melody.notes.length} notes • Listen to the tune, then tap it
                   back
                 </p>
@@ -351,7 +439,7 @@ export const Game = () => {
                 <button
                   type="button"
                   onClick={() => handleTriggerRoll(true)}
-                  className="text-xs px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-black/60 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer shrink-0"
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/45 text-[#ffe875] cursor-pointer shrink-0"
                 >
                   🎲 Reroll (1 left)
                 </button>
@@ -359,23 +447,25 @@ export const Game = () => {
             </div>
 
             {finalRoll === 20 && (
-              <div className="rounded-xl bg-amber-500/20 border border-amber-300/60 px-3 py-2 text-center text-xs font-bold text-[#ffe875]">
+              <div className="animate-gold-pulse rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-2 text-center text-xs font-bold text-[#ffe875]">
                 ✨ CRITICAL SUCCESS! Easiest tune with 3.0x XP payout!
               </div>
             )}
             {finalRoll === 1 && (
-              <div className="rounded-xl bg-red-950/70 border border-red-400/50 px-3 py-2 text-center text-xs font-bold text-red-200">
+              <div className="rounded-xl bg-red-950/80 border border-red-400/60 px-3 py-2 text-center text-xs font-bold text-red-200">
                 💀 BRUTAL! Hardest tune, clearable for 3.0x XP!
               </div>
             )}
 
-            <Keyboard
-              highlightedMidi={highlightedMidi}
-              feedbackMidi={null}
-              feedbackState={null}
-              disabled
-              onKeyPress={() => {}}
-            />
+            <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
+              <Keyboard
+                highlightedMidi={highlightedMidi}
+                feedbackMidi={null}
+                feedbackState={null}
+                disabled
+                onKeyPress={() => {}}
+              />
+            </div>
 
             <div className="flex gap-2.5">
               <button
@@ -398,18 +488,17 @@ export const Game = () => {
         )}
 
         {phase === 'PLAY' && melody && tier && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-[#ffe875]">
                 Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
                 {melody.notes.length}
               </span>
-              <span className="text-[#f5ead2]/80">
+              <span className="text-[#f5ead2]/85">
                 Hits: {correctCount}/{playIdx}
               </span>
             </div>
 
-            {/* Progress pips */}
             <div className="flex gap-1 w-full">
               {melody.notes.map((_, idx) => (
                 <div
@@ -419,31 +508,33 @@ export const Game = () => {
                       ? 'bg-[#d4af37]'
                       : idx === playIdx
                         ? 'bg-[#ffe875]'
-                        : 'bg-black/40'
+                        : 'bg-black/45'
                   }`}
                 />
               ))}
             </div>
 
-            <Keyboard
-              highlightedMidi={null}
-              feedbackMidi={feedbackMidi}
-              feedbackState={feedbackState}
-              onKeyPress={handleKeyPress}
-            />
+            <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
+              <Keyboard
+                highlightedMidi={null}
+                feedbackMidi={feedbackMidi}
+                feedbackState={feedbackState}
+                onKeyPress={handleKeyPress}
+              />
+            </div>
 
             <button
               type="button"
               onClick={() => setPhase('LISTEN')}
-              className="text-xs text-[#f5ead2]/70 hover:text-white underline self-center cursor-pointer pt-1"
+              className="text-xs text-[#f5ead2]/75 hover:text-white underline self-center cursor-pointer pt-0.5"
             >
               Listen again before finishing
             </button>
           </div>
         )}
 
-        {phase === 'RESULTS' && lastResult && tier && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-5 flex flex-col items-center text-center gap-4">
+        {phase === 'RESULTS' && lastResult && tier && finalRoll !== null && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center text-center gap-3.5">
             {lastResult.passed ? (
               <>
                 <div className="text-4xl">
@@ -455,7 +546,7 @@ export const Game = () => {
                       ? 'Flawless Performance!'
                       : 'The Tavern Cheers!'}
                   </h2>
-                  <p className="text-sm text-[#f5ead2]/85 mt-1">
+                  <p className="text-sm text-[#f5ead2]/90 mt-0.5">
                     {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
                     <span className="font-bold text-[#ffe875]">
                       +{lastResult.xpEarned} XP
@@ -463,38 +554,46 @@ export const Game = () => {
                   </p>
                 </div>
                 {lastResult.leveledUp && (
-                  <div className="w-full rounded-xl bg-amber-500/20 border border-amber-300/60 px-3 py-2 text-xs font-bold text-[#ffe875]">
+                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-2 text-xs font-bold text-[#ffe875]">
                     🎉 Level Up! You are now Level {lastResult.profile.level}{' '}
                     {lastResult.profile.title}!
                   </div>
                 )}
+                {lastResult.unlockedFeat && (
+                  <div className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-2 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]">
+                    <img
+                      src={bountySealUrl}
+                      alt=""
+                      className="w-5 h-5 object-contain"
+                    />
+                    Rare Feat Unlocked: {lastResult.unlockedFeat.toUpperCase()}!
+                  </div>
+                )}
               </>
             ) : (
-              <>
-                <div className="text-4xl">🍅🍅🍅</div>
-                <div>
-                  <h2 className="font-serif text-2xl font-bold text-red-300">
-                    Tomatoes Thrown!
-                  </h2>
-                  <p className="text-sm text-[#f5ead2]/85 mt-1 italic">
-                    &ldquo;{heckle}&rdquo;
-                  </p>
-                  <p className="text-xs text-red-200/80 mt-2">
-                    {Math.round(lastResult.accuracy * 100)}% Accuracy (need{' '}
-                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}% to earn XP) • 0
-                    XP
-                  </p>
-                </div>
-              </>
+              <div className="animate-tomato-splat flex flex-col items-center gap-1">
+                <div className="text-5xl">🍅🍅🍅</div>
+                <h2 className="font-serif text-2xl font-bold text-red-300">
+                  Tomatoes Thrown!
+                </h2>
+                <p className="text-sm text-[#f5ead2]/90 italic">
+                  &ldquo;{heckle}&rdquo;
+                </p>
+                <p className="text-xs text-red-200/85 mt-1">
+                  {Math.round(lastResult.accuracy * 100)}% Accuracy (need{' '}
+                  {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}% to earn XP) • 0 XP
+                </p>
+              </div>
             )}
 
-            <div className="w-full rounded-xl bg-black/35 border border-[#d4af37]/30 px-3 py-2.5 text-xs text-[#f5ead2]/80 flex justify-between">
-              <span>Today&apos;s Plays: {lastResult.daily.attemptsCount}</span>
-              <span>Today&apos;s XP: +{lastResult.daily.todayXp}</span>
-              <span>
-                Best: {Math.round(lastResult.daily.bestAccuracy * 100)}%
-              </span>
-            </div>
+            <ResultCard
+              utcDate={lastResult.daily.utcDate}
+              roll={finalRoll}
+              accuracy={lastResult.accuracy}
+              xpEarned={lastResult.xpEarned}
+              passed={lastResult.passed}
+              profile={lastResult.profile}
+            />
 
             <div className="w-full flex gap-2.5">
               <button
@@ -504,14 +603,25 @@ export const Game = () => {
               >
                 Play Again (Grind XP)
               </button>
+              <button
+                type="button"
+                onClick={() => setShowLeaderboard(true)}
+                className="py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer"
+              >
+                🏆 Ranks
+              </button>
             </div>
           </div>
         )}
       </main>
 
-      <footer className="text-center text-[11px] text-[#f5ead2]/50">
+      <footer className="text-center text-[11px] text-[#f5ead2]/55">
         Lute Roll • UTC {state?.daily.utcDate ?? ''} • r/luteroll
       </footer>
+
+      {showLeaderboard && (
+        <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
+      )}
     </div>
   );
 };

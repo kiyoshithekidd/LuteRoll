@@ -19,15 +19,24 @@
   },
   "permissions": {
     "redis": true,
+    "journeys": true,
     "reddit": {
       "enable": true
+    }
+  },
+  "scheduler": {
+    "tasks": {
+      "daily-tavern-post": {
+        "endpoint": "/internal/cron/daily-post",
+        "cron": "0 0 * * *"
+      }
     }
   },
   "menu": {
     "items": [
       {
         "label": "Create Lute Roll Post",
-        "description": "Create a new Lute Roll tavern post in r/luteroll",
+        "description": "Create a new Lute Roll tavern post",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
@@ -38,7 +47,7 @@
     "onAppInstall": "/internal/triggers/on-app-install"
   },
   "dev": {
-    "subreddit": "luteroll"
+    "subreddit": "lute_roll_dev"
   },
   "scripts": {
     "dev": "vite build --watch",
