@@ -1,7 +1,9 @@
 import './index.css';
 
 import {
+  lazy,
   StrictMode,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -23,8 +25,11 @@ import { generateMelody } from '../shared/melodyGenerator';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import { soundEngine } from './audio/soundEngine';
-import { DiceTray3D } from './components/DiceTray3D';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
+
+const DiceTray3D = lazy(() =>
+  import('./components/DiceTray3D').then((m) => ({ default: m.DiceTray3D }))
+);
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ResultCard } from './components/ResultCard';
 import {
@@ -392,10 +397,18 @@ export const Game = () => {
             </div>
 
             {rollTrigger > 0 ? (
-              <DiceTray3D
-                rollTrigger={rollTrigger}
-                onSettled={(v) => void handleDiceSettled(v)}
-              />
+              <Suspense
+                fallback={
+                  <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex items-center justify-center text-xs text-[#ffe875]">
+                    Preparing dice tray...
+                  </div>
+                }
+              >
+                <DiceTray3D
+                  rollTrigger={rollTrigger}
+                  onSettled={(v) => void handleDiceSettled(v)}
+                />
+              </Suspense>
             ) : (
               <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex flex-col items-center justify-center gap-2 shadow-inner">
                 <span className="font-serif text-5xl font-bold text-[#ffe875] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">

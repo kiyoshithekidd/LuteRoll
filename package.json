@@ -12,7 +12,7 @@
     "login": "devvit login",
     "prettier": "prettier --write .",
     "test:types": "tsc --build",
-    "test:unit": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test \"src/**/*.test.ts\""
+    "test:unit": "node -e \"import('esbuild').then(e => e.build({ entryPoints: ['tests/melodyGenerator.test.ts'], bundle: true, platform: 'node', format: 'esm', write: false })).then(r => import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64')))\""
   },
   "engines": {
     "node": ">=24.0.0"
@@ -37,6 +37,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "6.3.0",
+    "esbuild": "^0.28.2",
     "eslint": "10.14.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.7",
