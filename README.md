@@ -8,11 +8,11 @@ One sentence version: roll the die, learn the tune, earn the XP, come back tomor
 
 ## How it plays
 
-1. Roll a d20. High roll means an easier melody. Nat 20 is the easiest tune with the biggest payout. Nat 1 is the hardest tune, still clearable, and worth attempting.
-2. You get one reroll per day, but you can play as many times a day as you want. Every play earns its XP.
-3. Listen to the generated melody, with the keys lighting up as each note sounds, then tap it back on the on-screen keyboard.
-4. Wrong notes cost accuracy and flash red, but the attempt keeps going. Fall below the fail threshold and the attempt fails for 0 XP.
-5. Level up through bard titles, from Busker to Legend of the Tavern. Your title becomes your user flair in r/luteroll. Keep a daily streak, share your result card in the daily thread, and climb the leaderboards.
+1. **Roll a d20:** High roll means an easier melody. **Nat 20** is the easiest tune with a **3.0x crit payout**. **Nat 1** is the hardest (*Brutal*) tune, still clearable, and pays **3.0x**. You get **1 reroll per day** and can replay as many times a day as you want.
+2. **Listen & Replay:** Watch the keys light up as Web Audio plays the daily melody, then tap it back note for note on the on-screen keyboard.
+3. **Score & Survive:** Hit **50%+ accuracy** to clear and earn XP (below 50% = tomatoes & 0 XP). Maintain a **3-day streak** to unlock **Ward of Grace** (1 free missed note per run; **2** at a 7-day streak) and earn a **Streak Freeze** every 5 days.
+4. **Collect & Progress:** Earn up to **2 Mystery Chests per day** to collect **48 Tavern Relics** (with 3-pull duplicate pity) and unlock **12 synthesized piano, organ, and synth voices**. Level up across **15 Bard Title tiers** from *Busker* (Lvl 1) to *Mythic Maestro* (Lvl 100), complete **Daily Bounties**, and unlock **15 Feats**.
+5. **Compete on Reddit:** Your Bard Title syncs to your `r/luteroll` user flair. Share your result card in the daily thread and climb the daily & all-time leaderboards.
 
 ## Contest
 
@@ -26,9 +26,11 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 
 Playable & verified on Devvit Web (`r/lute_roll_dev`), featuring:
 - **3D d20 Tavern Tray:** Three.js + physics-driven d20 roll with 1 daily reroll and 950ms reveal banner.
-- **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio lute/piano synth with lit key guides.
-- **Mobile & Desktop Controls:** Thumb-friendly 2-row touch keyboard (`C5–C6` over `C4–B4`) plus desktop keyboard shortcuts (`A W S E D F T G Y H U J K` for `C4–C5`), with out-of-range keys dimmed per tier.
-- **Reddit-Native Loop:** Automatic `r/luteroll` user flair sync, Snoovatars in HUD & leaderboards, one-tap result card posting to thread comments, subreddit subscribe CTA, daily UTC midnight post scheduler, and Devvit Journeys telemetry.
+- **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio with lit key guides.
+- **12 Unlockable Keyboard Voices:** *Tavern Upright*, *Saloon Honky-Tonk*, *Baroque Harpsichord*, *Clockwork Music Box*, *Velvet Electric Keys*, *Funky Clavinet*, *Cathedral Pipe Organ*, *Tavern Concertina*, *Arcane Lead Synth*, *Gilded Carillon*, *Starlight Celesta*, and *Astral Concert Grand* — all synthesized with zero external audio samples.
+- **Tavern Vault & Retention Loop:** 48 Collectible Relics (Common/Uncommon/Rare/Mythic) with 3-pull Duplicate Pity, 15 Feats, 15 Bard Title tiers (Levels 1–100), Daily Tavern Bounties, Ward of Grace spell forgiveness, and Tavern Streak Freezes.
+- **Mobile & Desktop Controls:** Thumb-friendly 2-row touch keyboard (`C5–C6` over `C4–B4`) with mobile haptics, plus desktop keyboard shortcuts (`A W S E D F T G Y H U J K` for `C4–C5`), with out-of-range keys dimmed per tier and an in-card Tavern Guide accessible before rolling.
+- **Reddit-Native Loop:** Automatic `r/luteroll` user flair sync, Snoovatars in HUD & leaderboards, one-tap result card posting to thread comments, subreddit subscribe CTA, auto-stickied daily UTC midnight post scheduler, and Devvit Journeys telemetry.
 
 > **HACKATHON DEPLOYMENT RULE — DO NOT PUBLISH:**
 > Never run `devvit publish` (or `npm run launch`). Per the Reddit Game of the Day Hackathon rules, apps must remain **private/unpublished** during the contest. Use `npm run dev` (`devvit playtest`) for live testing and `npm run deploy` (`devvit upload`) to upload private versions.
