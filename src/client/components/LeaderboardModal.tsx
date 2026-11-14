@@ -93,7 +93,7 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
                   className="py-2 flex items-center justify-between text-xs"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-6 font-bold text-[#6e4726]">
+                    <span className="w-6 font-bold text-[#6e4726] shrink-0">
                       {entry.rank === 1
                         ? '🥇'
                         : entry.rank === 2
@@ -102,6 +102,13 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
                             ? '🥉'
                             : `#${entry.rank}`}
                     </span>
+                    {entry.snoovatarUrl && (
+                      <img
+                        src={entry.snoovatarUrl}
+                        alt=""
+                        className="w-5 h-5 rounded-full object-cover border border-[#9c7538]/50 shrink-0 bg-[#2c1b0e]"
+                      />
+                    )}
                     <span className="font-semibold truncate text-[#1c1208]">
                       u/{entry.username}
                     </span>

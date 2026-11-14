@@ -4,6 +4,8 @@ import type {
   CommitRollRequest,
   CommitRollResponse,
   ErrorResponse,
+  ShareCommentRequest,
+  ShareCommentResponse,
   StateResponse,
   SubmitAttemptRequest,
 } from '../../shared/api';
@@ -22,10 +24,14 @@ export const api = new Hono();
 async function resolvePlayer() {
   const username = await reddit.getCurrentUsername();
   if (username) {
+    const snoovatarUrl = await reddit
+      .getSnoovatarUrl(username)
+      .catch(() => undefined);
     return {
       playerKey: `u:${username}`,
       username,
       isAnonymous: false,
+      snoovatarUrl: snoovatarUrl ?? null,
     };
   }
   const fallbackId = context.userId ?? context.postId ?? 'guest';
@@ -33,6 +39,7 @@ async function resolvePlayer() {
     playerKey: `anon:${fallbackId}`,
     username: 'Wandering Bard',
     isAnonymous: true,
+    snoovatarUrl: null,
   };
 }
 
@@ -49,7 +56,12 @@ api.get('/state', async (c) => {
   try {
     const player = await resolvePlayer();
     const [profile, daily] = await Promise.all([
-      getPlayerProfile(player.playerKey, player.username, player.isAnonymous),
+      getPlayerProfile(
+        player.playerKey,
+        player.username,
+        player.isAnonymous,
+        player.snoovatarUrl
+      ),
       getDailyState(player.playerKey),
     ]);
 
@@ -144,7 +156,8 @@ api.post('/attempt', async (c) => {
       player.playerKey,
       player.username,
       player.isAnonymous,
-      body.accuracy
+      body.accuracy,
+      player.snoovatarUrl
     );
 
     if (result.passed) {
@@ -155,6 +168,56 @@ api.post('/attempt', async (c) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to record attempt';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/share-comment', async (c) => {
+  const { postId } = context;
+  if (!postId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'postId is required' },
+      400
+    );
+  }
+
+  try {
+    const body = (await c.req.json()) as Partial<ShareCommentRequest>;
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text || text.length > 500) {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Invalid result card text' },
+        400
+      );
+    }
+
+    const player = await resolvePlayer();
+    const commentBody = player.isAnonymous
+      ? text
+      : `**u/${player.username}**\n\n${text}`;
+    await reddit.submitComment({
+      id: postId,
+      text: commentBody,
+    });
+
+    return c.json<ShareCommentResponse>({
+      type: 'share-comment',
+      ok: true,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not post comment';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/subscribe', async (c) => {
+  try {
+    await reddit.subscribeToCurrentSubreddit();
+    return c.json({ ok: true });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not subscribe';
     return c.json<ErrorResponse>({ status: 'error', message }, 400);
   }
 });

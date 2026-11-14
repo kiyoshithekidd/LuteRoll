@@ -24,14 +24,18 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 
 ## Status
 
-Milestone 2 in progress: core loop playable (3D d20 physics roll, deterministic melody generator, Web Audio synth, 2-octave touch keyboard, XP/streaks in Redis).
+Playable & verified on Devvit Web (`r/lute_roll_dev`), featuring:
+- **3D d20 Tavern Tray:** Three.js + physics-driven d20 roll with 1 daily reroll and 950ms reveal banner.
+- **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio lute/piano synth with lit key guides.
+- **Mobile & Desktop Controls:** Thumb-friendly 2-row touch keyboard (`C5–C6` over `C4–B4`) plus desktop keyboard shortcuts (`A W S E D F T G Y H U J K` for `C4–C5`), with out-of-range keys dimmed per tier.
+- **Reddit-Native Loop:** Automatic `r/luteroll` user flair sync, Snoovatars in HUD & leaderboards, one-tap result card posting to thread comments, subreddit subscribe CTA, daily UTC midnight post scheduler, and Devvit Journeys telemetry.
 
 > **HACKATHON DEPLOYMENT RULE — DO NOT PUBLISH:**
 > Never run `devvit publish` (or `npm run launch`). Per the Reddit Game of the Day Hackathon rules, apps must remain **private/unpublished** during the contest. Use `npm run dev` (`devvit playtest`) for live testing and `npm run deploy` (`devvit upload`) to upload private versions.
 
 ## Tech
 
-Devvit Web, React, as a Reddit Interactive Post. Mobile-first, most players are on phones. Melodies are generated originals, deterministic per date and final roll. Audio is Web Audio only. No real songs, no licensed music.
+Devvit Web, React, TypeScript, Hono, Redis, Three.js, Tailwind CSS, and Web Audio API as a Reddit Interactive Post. Melodies are generated originals, deterministic per date and final roll. Audio is Web Audio only. No real songs, no licensed music.
 
 ## Docs
 

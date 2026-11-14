@@ -7,39 +7,35 @@ import type { StateResponse } from '../shared/api';
 import { getTierForRoll } from '../shared/constants';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
+import luteCrestUrl from './assets/lute-crest.webp';
 import { trackAppReady } from './telemetry';
 
-function D20Emblem({ value }: { value: number | string }) {
+function getUtcResetCountdown(): string {
+  const now = new Date();
+  const nextMidnight = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1
+  );
+  const diffMs = Math.max(0, nextMidnight - now.getTime());
+  const hours = Math.floor(diffMs / 3_600_000);
+  const mins = Math.floor((diffMs % 3_600_000) / 60_000);
+  return `${hours}h ${mins}m`;
+}
+
+function D20Emblem({ value }: { value: number | null }) {
   return (
-    <div className="relative flex items-center justify-center w-20 h-20 select-none animate-gold-pulse rounded-full">
-      <svg
-        viewBox="0 0 100 100"
-        className="w-full h-full drop-shadow-[0_6px_12px_rgba(0,0,0,0.7)]"
-        aria-hidden="true"
-      >
-        <defs>
-          <radialGradient id="goldDie" cx="40%" cy="30%" r="70%">
-            <stop offset="0%" stopColor="#fff3b0" />
-            <stop offset="55%" stopColor="#d4af37" />
-            <stop offset="100%" stopColor="#8a6412" />
-          </radialGradient>
-        </defs>
-        <polygon
-          points="50,4 92,28 92,72 50,96 8,72 8,28"
-          fill="url(#goldDie)"
-          stroke="#fff8d6"
-          strokeWidth="2.5"
-        />
-        <polygon
-          points="50,14 82,66 18,66"
-          fill="none"
-          stroke="rgba(28,18,8,0.35)"
-          strokeWidth="2"
-        />
-      </svg>
-      <span className="absolute font-serif text-2xl font-bold text-[#1c1208] translate-y-0.5">
-        {value}
-      </span>
+    <div className="relative flex items-center justify-center w-24 h-24 select-none animate-gold-pulse rounded-full">
+      <img
+        src={luteCrestUrl}
+        alt="Lute Roll Crest"
+        className="w-24 h-24 rounded-full object-cover border-2 border-[#d4af37] shadow-[0_6px_18px_rgba(0,0,0,0.75)]"
+      />
+      {value !== null && (
+        <span className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
+          d20: {value}
+        </span>
+      )}
     </div>
   );
 }
@@ -91,7 +87,7 @@ export const Splash = () => {
           </div>
         </div>
 
-        <D20Emblem value={finalRoll ?? 'd20'} />
+        <D20Emblem value={finalRoll} />
 
         <div className="space-y-1">
           <h1 className="font-serif text-3xl font-bold tracking-tight text-[#ffe875] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
@@ -117,7 +113,8 @@ export const Splash = () => {
               </p>
               <p className="text-xs text-[#6e4726]">
                 {tier.xpMultiplier}x XP • {state?.daily.attemptsCount ?? 0} plays
-                • +{state?.daily.todayXp ?? 0} XP today
+                • +{state?.daily.todayXp ?? 0} XP • Next roll{' '}
+                {getUtcResetCountdown()}
               </p>
             </div>
             {state && state.profile.feats.length > 0 && (

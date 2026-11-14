@@ -24,6 +24,8 @@ import {
 import { generateMelody } from '../shared/melodyGenerator';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
+import tomatoSplatUrl from './assets/tomato-splat.webp';
+import nat20SealUrl from './assets/nat20-seal.webp';
 import { soundEngine } from './audio/soundEngine';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
 import { LeaderboardModal } from './components/LeaderboardModal';
@@ -379,15 +381,24 @@ export const Game = () => {
       {/* Top Tavern HUD */}
       <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
-              Lute Roll
-            </h1>
-            <p className="text-[11px] sm:text-xs text-[#f5ead2]/85 truncate">
-              {state
-                ? `${state.profile.username} • Lvl ${level} ${state.profile.title}`
-                : 'Entering the tavern...'}
-            </p>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {state?.profile.snoovatarUrl && (
+              <img
+                src={state.profile.snoovatarUrl}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover border border-[#d4af37]/70 bg-black/40 shrink-0"
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
+                Lute Roll
+              </h1>
+              <p className="text-[11px] sm:text-xs text-[#f5ead2]/85 truncate">
+                {state
+                  ? `${state.profile.username} • Lvl ${level} ${state.profile.title}`
+                  : 'Entering the tavern...'}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {state && state.profile.streak > 0 && (
@@ -477,6 +488,14 @@ export const Game = () => {
                 High roll = easier tune • Nat 20 = 3.0x crit payout • Nat 1 =
                 Brutal 3.0x
               </p>
+              {state &&
+                state.profile.totalXp === 0 &&
+                state.daily.attemptsCount === 0 && (
+                  <p className="mt-2 text-[11px] text-[#ffe875] bg-black/40 border border-[#d4af37]/40 rounded-lg px-2.5 py-1">
+                    First time? Roll the die, listen to the tune, then tap it
+                    back note for note.
+                  </p>
+                )}
             </div>
 
             <div className="relative w-full">
@@ -660,9 +679,15 @@ export const Game = () => {
           <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center text-center gap-3.5">
             {lastResult.passed ? (
               <>
-                <div className="text-4xl">
-                  {lastResult.accuracy === 1 ? '🏆' : '🎶'}
-                </div>
+                {lastResult.accuracy === 1 || finalRoll === 20 ? (
+                  <img
+                    src={nat20SealUrl}
+                    alt="Critical Seal"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-[#ffe875] shadow-lg"
+                  />
+                ) : (
+                  <div className="text-4xl">🎶</div>
+                )}
                 <div>
                   <h2 className="font-serif text-2xl font-bold text-[#ffe875]">
                     {lastResult.accuracy === 1
@@ -694,20 +719,34 @@ export const Game = () => {
                 )}
               </>
             ) : (
-              <div className="animate-tomato-splat flex flex-col items-center gap-1">
-                <div className="text-5xl">🍅🍅🍅</div>
+              <div className="animate-tomato-splat flex flex-col items-center gap-1.5">
+                <img
+                  src={tomatoSplatUrl}
+                  alt="Tomatoes Thrown"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-red-400/70 shadow-lg"
+                />
                 <h2 className="font-serif text-2xl font-bold text-red-300">
                   Tomatoes Thrown!
                 </h2>
                 <p className="text-sm text-[#f5ead2]/90 italic">
                   &ldquo;{heckle}&rdquo;
                 </p>
-                <p className="text-xs text-red-200/85 mt-1">
+                <p className="text-xs text-red-200/85 mt-0.5">
                   {Math.round(lastResult.accuracy * 100)}% Accuracy (need{' '}
                   {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}% to earn XP) • 0 XP
                 </p>
               </div>
             )}
+
+            <div className="w-full flex items-center justify-center gap-3 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-3 py-1.5">
+              <span>Plays: {lastResult.daily.attemptsCount}</span>
+              <span>•</span>
+              <span>Clears: {lastResult.daily.clearsCount}</span>
+              <span>•</span>
+              <span>
+                Best: {Math.round(lastResult.daily.bestAccuracy * 100)}%
+              </span>
+            </div>
 
             <ResultCard
               utcDate={lastResult.daily.utcDate}

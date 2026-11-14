@@ -9,6 +9,7 @@ export type PlayerProfile = {
   streak: number;
   lastPlayedDate: string | null;
   feats: RareFeat[];
+  snoovatarUrl?: string | null;
 };
 
 export type DailyState = {
@@ -62,6 +63,16 @@ export type LeaderboardEntry = {
   rank: number;
   username: string;
   score: number;
+  snoovatarUrl?: string | null;
+};
+
+export type ShareCommentRequest = {
+  text: string;
+};
+
+export type ShareCommentResponse = {
+  type: 'share-comment';
+  ok: boolean;
 };
 
 export type LeaderboardResponse = {

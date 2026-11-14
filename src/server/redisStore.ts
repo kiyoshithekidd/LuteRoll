@@ -45,7 +45,8 @@ function parseFeats(raw?: string): RareFeat[] {
 export async function getPlayerProfile(
   playerKey: string,
   username: string,
-  isAnonymous: boolean
+  isAnonymous: boolean,
+  snoovatarUrl?: string | null
 ): Promise<PlayerProfile> {
   const data = await redis.hGetAll(profileKey(playerKey));
   const totalXp = data.xp ? parseInt(data.xp, 10) : 0;
@@ -54,6 +55,7 @@ export async function getPlayerProfile(
   const streak = data.streak ? parseInt(data.streak, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
+  const resolvedAvatar = snoovatarUrl ?? (data.snoovatarUrl || null);
 
   return {
     username,
@@ -64,6 +66,7 @@ export async function getPlayerProfile(
     streak,
     lastPlayedDate,
     feats,
+    snoovatarUrl: resolvedAvatar,
   };
 }
 
@@ -154,7 +157,8 @@ export async function submitAttempt(
   playerKey: string,
   username: string,
   isAnonymous: boolean,
-  rawAccuracy: number
+  rawAccuracy: number,
+  snoovatarUrl?: string | null
 ): Promise<SubmitAttemptResponse> {
   const accuracy = Math.max(0, Math.min(1, rawAccuracy));
   const utcDate = getUtcDateKey();
@@ -163,7 +167,7 @@ export async function submitAttempt(
   const pKey = profileKey(playerKey);
 
   const [profile, daily] = await Promise.all([
-    getPlayerProfile(playerKey, username, isAnonymous),
+    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
     getDailyState(playerKey, utcDate),
   ]);
 
@@ -207,6 +211,8 @@ export async function submitAttempt(
     unlockedFeat = 'streak30';
   }
 
+  const resolvedAvatar = snoovatarUrl ?? profile.snoovatarUrl ?? null;
+
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       attemptsCount: String(newAttemptsCount),
@@ -222,8 +228,13 @@ export async function submitAttempt(
       streak: String(newStreak),
       lastPlayedDate: newLastPlayedDate ?? '',
       feats: JSON.stringify(nextFeats),
+      ...(resolvedAvatar ? { snoovatarUrl: resolvedAvatar } : {}),
     }),
   ];
+
+  if (!isAnonymous && resolvedAvatar) {
+    updates.push(redis.hSet('lb:snoovatars', { [username]: resolvedAvatar }));
+  }
 
   if (!isAnonymous && xpEarned > 0) {
     updates.push(
@@ -251,6 +262,7 @@ export async function submitAttempt(
       streak: newStreak,
       lastPlayedDate: newLastPlayedDate,
       feats: nextFeats,
+      snoovatarUrl: resolvedAvatar,
     },
     daily: {
       ...daily,
@@ -278,10 +290,17 @@ async function fetchSingleBoard(
     isAnonymous ? Promise.resolve(undefined) : redis.zScore(zsetKey, username),
   ]);
 
+  const avatars = await Promise.all(
+    rawTop.map((entry) =>
+      redis.hGet('lb:snoovatars', entry.member).catch(() => undefined)
+    )
+  );
+
   const top: LeaderboardEntry[] = rawTop.map((entry, idx) => ({
     rank: idx + 1,
     username: entry.member,
     score: entry.score,
+    snoovatarUrl: avatars[idx] || null,
   }));
 
   const myRank =
