@@ -105,13 +105,20 @@ export function getTierForRoll(roll: number): DifficultyTier {
 }
 
 export const BARD_TITLE_LADDER: readonly { minLevel: number; title: string }[] = [
+  { minLevel: 100, title: 'Mythic Maestro' },
+  { minLevel: 90, title: 'Grand Conservatory' },
+  { minLevel: 75, title: 'Sovereign of Keys' },
+  { minLevel: 60, title: 'Archmage of Song' },
   { minLevel: 50, title: 'Voice of the Realm' },
   { minLevel: 40, title: 'Legend of the Tavern' },
   { minLevel: 30, title: 'Master of the Lute' },
-  { minLevel: 20, title: 'Tavern Bard' },
+  { minLevel: 25, title: 'Royal Kapellmeister' },
+  { minLevel: 20, title: 'Tavern Virtuoso' },
   { minLevel: 15, title: 'Songsmith' },
   { minLevel: 10, title: 'Wandering Minstrel' },
-  { minLevel: 5, title: 'Tavern Singer' },
+  { minLevel: 7, title: 'Balladeer' },
+  { minLevel: 4, title: 'Tavern Singer' },
+  { minLevel: 2, title: 'Apprentice Bard' },
   { minLevel: 1, title: 'Busker' },
 ] as const;
 
@@ -233,11 +240,17 @@ export const RELIC_CATALOG: readonly RelicMeta[] = [
 export type KeyboardVoiceMeta = {
   id:
     | 'grand_piano'
+    | 'honky_tonk'
     | 'harpsichord'
+    | 'music_box'
     | 'electric_piano'
+    | 'clavinet'
     | 'cathedral_organ'
+    | 'accordion'
     | 'arcane_synth'
-    | 'celesta';
+    | 'bell_organ'
+    | 'celesta'
+    | 'astral_grand';
   name: string;
   description: string;
   unlockRelics: number;
@@ -253,6 +266,13 @@ export const KEYBOARD_VOICES: readonly KeyboardVoiceMeta[] = [
     icon: '🎹',
   },
   {
+    id: 'honky_tonk',
+    name: 'Saloon Honky-Tonk',
+    description: 'Detuned ragtime tavern upright.',
+    unlockRelics: 1,
+    icon: '🍺',
+  },
+  {
     id: 'harpsichord',
     name: 'Baroque Harpsichord',
     description: 'Crisp, plucked royal harpsichord.',
@@ -260,31 +280,66 @@ export const KEYBOARD_VOICES: readonly KeyboardVoiceMeta[] = [
     icon: '🏰',
   },
   {
+    id: 'music_box',
+    name: 'Clockwork Music Box',
+    description: 'Delicate wind-up chime keys.',
+    unlockRelics: 4,
+    icon: '⚙️',
+  },
+  {
     id: 'electric_piano',
     name: 'Velvet Electric Keys',
     description: 'Smooth bell-toned electric piano.',
-    unlockRelics: 5,
+    unlockRelics: 6,
     icon: '⚡',
+  },
+  {
+    id: 'clavinet',
+    name: 'Funky Clavinet',
+    description: 'Punchy percussive electric clav.',
+    unlockRelics: 8,
+    icon: '🎸',
   },
   {
     id: 'cathedral_organ',
     name: 'Cathedral Pipe Organ',
     description: 'Rich, resonant multi-pipe organ.',
-    unlockRelics: 9,
+    unlockRelics: 10,
     icon: '⛪',
+  },
+  {
+    id: 'accordion',
+    name: 'Tavern Concertina',
+    description: 'Bellows-driven folk reed organ.',
+    unlockRelics: 12,
+    icon: '🪗',
   },
   {
     id: 'arcane_synth',
     name: 'Arcane Lead Synth',
     description: 'Detuned fantasy analog synth.',
-    unlockRelics: 14,
+    unlockRelics: 15,
     icon: '🔮',
+  },
+  {
+    id: 'bell_organ',
+    name: 'Gilded Carillon',
+    description: 'Shimmering bronze tower bells.',
+    unlockRelics: 18,
+    icon: '🔔',
   },
   {
     id: 'celesta',
     name: 'Starlight Celesta',
     description: 'Crystalline bell-keyed celesta.',
-    unlockRelics: 19,
+    unlockRelics: 21,
     icon: '✨',
+  },
+  {
+    id: 'astral_grand',
+    name: 'Astral Concert Grand',
+    description: 'Lush harmonic masterwork grand.',
+    unlockRelics: 24,
+    icon: '👑',
   },
 ] as const;

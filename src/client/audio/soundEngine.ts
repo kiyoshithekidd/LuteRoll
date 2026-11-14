@@ -149,6 +149,99 @@ class SoundEngine {
         masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.22);
         break;
       }
+      case 'honky_tonk': {
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc1.detune.setValueAtTime(-11, now);
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(freq, now);
+        osc2.detune.setValueAtTime(11, now);
+        osc2Gain.gain.setValueAtTime(0.85, now);
+        filter.frequency.setValueAtTime(Math.min(5200, freq * 6.5), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(500, freq * 2.4),
+          now + dur
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.26, now + 0.01);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.14);
+        break;
+      }
+      case 'music_box': {
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(freq * 2, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 4, now);
+        osc2Gain.gain.setValueAtTime(0.18, now);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        filter.frequency.setValueAtTime(7500, now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.24, now + 0.005);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.2);
+        break;
+      }
+      case 'clavinet': {
+        osc1.type = 'square';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq, now);
+        osc2Gain.gain.setValueAtTime(0.35, now);
+        filter.frequency.setValueAtTime(Math.min(5800, freq * 7), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(420, freq * 1.8),
+          now + dur * 0.55
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.2, now + 0.006);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur * 0.85);
+        break;
+      }
+      case 'accordion': {
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc1.detune.setValueAtTime(-5, now);
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(freq, now);
+        osc2.detune.setValueAtTime(6, now);
+        osc2Gain.gain.setValueAtTime(0.65, now);
+        filter.frequency.setValueAtTime(Math.min(3400, freq * 4.2), now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.22, now + 0.025);
+        masterGain.gain.setValueAtTime(0.2, now + dur * 0.8);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.12);
+        break;
+      }
+      case 'bell_organ': {
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 2.5, now);
+        osc2Gain.gain.setValueAtTime(0.26, now);
+        filter.frequency.setValueAtTime(6400, now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.28, now + 0.01);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.24);
+        break;
+      }
+      case 'astral_grand': {
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc1.detune.setValueAtTime(-4, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        osc2.detune.setValueAtTime(4, now);
+        osc2Gain.gain.setValueAtTime(0.28, now);
+        filter.frequency.setValueAtTime(Math.min(6000, freq * 7), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(500, freq * 2.5),
+          now + dur
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.3, now + 0.012);
+        masterGain.gain.exponentialRampToValueAtTime(0.09, now + dur * 0.55);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.22);
+        break;
+      }
       case 'grand_piano':
       default: {
         osc1.type = 'triangle';

@@ -11,11 +11,17 @@ export type RelicRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
 
 export type KeyboardVoiceId =
   | 'grand_piano'
+  | 'honky_tonk'
   | 'harpsichord'
+  | 'music_box'
   | 'electric_piano'
+  | 'clavinet'
   | 'cathedral_organ'
+  | 'accordion'
   | 'arcane_synth'
-  | 'celesta';
+  | 'bell_organ'
+  | 'celesta'
+  | 'astral_grand';
 
 export type PlayerProfile = {
   username: string;
