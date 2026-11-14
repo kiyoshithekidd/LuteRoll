@@ -5,11 +5,15 @@ import {
   getLevelFromXp,
   getTierForRoll,
   getTitleForLevel,
+  KEYBOARD_VOICES,
+  RELIC_CATALOG,
 } from '../shared/constants';
 import type {
   DailyState,
+  KeyboardVoiceId,
   LeaderboardEntry,
   LeaderboardResponse,
+  OpenChestResponse,
   PlayerProfile,
   RareFeat,
   SubmitAttemptResponse,
@@ -42,6 +46,18 @@ function parseFeats(raw?: string): RareFeat[] {
   }
 }
 
+function parseStringArray(raw?: string): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getPlayerProfile(
   playerKey: string,
   username: string,
@@ -55,6 +71,12 @@ export async function getPlayerProfile(
   const streak = data.streak ? parseInt(data.streak, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
+  const relics = parseStringArray(data.relics);
+  const rawVoice = data.selectedVoice as KeyboardVoiceId | undefined;
+  const selectedVoice: KeyboardVoiceId =
+    rawVoice && KEYBOARD_VOICES.some((v) => v.id === rawVoice)
+      ? rawVoice
+      : 'grand_piano';
   const resolvedAvatar = snoovatarUrl ?? (data.snoovatarUrl || null);
 
   return {
@@ -66,6 +88,8 @@ export async function getPlayerProfile(
     streak,
     lastPlayedDate,
     feats,
+    relics,
+    selectedVoice,
     snoovatarUrl: resolvedAvatar,
   };
 }
@@ -85,6 +109,8 @@ export async function getDailyState(
     clearsCount: data.clearsCount ? parseInt(data.clearsCount, 10) : 0,
     bestAccuracy: data.bestAccuracy ? parseFloat(data.bestAccuracy) : 0,
     todayXp: data.todayXp ? parseInt(data.todayXp, 10) : 0,
+    chestsEarned: data.chestsEarned ? parseInt(data.chestsEarned, 10) : 0,
+    chestsOpened: data.chestsOpened ? parseInt(data.chestsOpened, 10) : 0,
   };
 }
 
@@ -223,12 +249,25 @@ export async function submitAttempt(
 
   const resolvedAvatar = snoovatarUrl ?? profile.snoovatarUrl ?? null;
 
+  let newChestsEarned = daily.chestsEarned;
+  if (passed && newChestsEarned < 1) {
+    newChestsEarned = 1;
+  }
+  if (
+    passed &&
+    (accuracy >= 1 || daily.finalRoll === 20) &&
+    newChestsEarned < 2
+  ) {
+    newChestsEarned = 2;
+  }
+
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       attemptsCount: String(newAttemptsCount),
       clearsCount: String(newClearsCount),
       bestAccuracy: newBestAccuracy.toFixed(4),
       todayXp: String(newTodayXp),
+      chestsEarned: String(newChestsEarned),
     }),
     redis.hSet(pKey, {
       username,
@@ -272,6 +311,8 @@ export async function submitAttempt(
       streak: newStreak,
       lastPlayedDate: newLastPlayedDate,
       feats: nextFeats,
+      relics: profile.relics,
+      selectedVoice: profile.selectedVoice,
       snoovatarUrl: resolvedAvatar,
     },
     daily: {
@@ -280,6 +321,7 @@ export async function submitAttempt(
       clearsCount: newClearsCount,
       bestAccuracy: newBestAccuracy,
       todayXp: newTodayXp,
+      chestsEarned: newChestsEarned,
     },
   };
 }
@@ -340,5 +382,127 @@ export async function getLeaderboards(
     utcDate,
     daily,
     allTime,
+  };
+}
+
+export async function openMysteryChest(
+  playerKey: string,
+  username: string,
+  isAnonymous: boolean,
+  snoovatarUrl?: string | null
+): Promise<OpenChestResponse> {
+  const utcDate = getUtcDateKey();
+  const dKey = dailyKey(playerKey, utcDate);
+  const pKey = profileKey(playerKey);
+
+  const [profile, daily] = await Promise.all([
+    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
+    getDailyState(playerKey, utcDate),
+  ]);
+
+  if (daily.chestsOpened >= daily.chestsEarned) {
+    throw new Error('No unopened Mystery Chest available right now.');
+  }
+
+  // Higher rarity odds on bonus (2nd) chest
+  const isBonus = daily.chestsOpened >= 1;
+  const r = Math.random();
+  const rarity = isBonus
+    ? r < 0.15
+      ? 'mythic'
+      : r < 0.45
+        ? 'rare'
+        : r < 0.8
+          ? 'uncommon'
+          : 'common'
+    : r < 0.05
+      ? 'mythic'
+      : r < 0.2
+        ? 'rare'
+        : r < 0.5
+          ? 'uncommon'
+          : 'common';
+
+  const pool = RELIC_CATALOG.filter((item) => item.rarity === rarity);
+  const picked = pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
+  const isDuplicate = profile.relics.includes(picked.id);
+  const bonusXp = isDuplicate
+    ? rarity === 'mythic' || rarity === 'rare'
+      ? 60
+      : 30
+    : 0;
+
+  const nextRelics = isDuplicate
+    ? profile.relics
+    : [...profile.relics, picked.id];
+  const newTotalXp = profile.totalXp + bonusXp;
+  const newLevel = getLevelFromXp(newTotalXp);
+  const newTitle = getTitleForLevel(newLevel);
+  const newTodayXp = daily.todayXp + bonusXp;
+  const newChestsOpened = daily.chestsOpened + 1;
+
+  const updates: Promise<unknown>[] = [
+    redis.hSet(dKey, {
+      chestsOpened: String(newChestsOpened),
+      todayXp: String(newTodayXp),
+    }),
+    redis.hSet(pKey, {
+      relics: JSON.stringify(nextRelics),
+      xp: String(newTotalXp),
+      level: String(newLevel),
+      title: newTitle,
+    }),
+  ];
+
+  if (!isAnonymous && bonusXp > 0) {
+    updates.push(
+      redis.zAdd('lb:xp:alltime', { member: username, score: newTotalXp }),
+      redis.zAdd(`lb:xp:daily:${utcDate}`, { member: username, score: newTodayXp })
+    );
+  }
+
+  await Promise.all(updates);
+
+  return {
+    type: 'open-chest',
+    relicId: picked.id,
+    isDuplicate,
+    bonusXp,
+    profile: {
+      ...profile,
+      relics: nextRelics,
+      totalXp: newTotalXp,
+      level: newLevel,
+      title: newTitle,
+    },
+    daily: {
+      ...daily,
+      chestsOpened: newChestsOpened,
+      todayXp: newTodayXp,
+    },
+  };
+}
+
+export async function selectKeyboardVoice(
+  playerKey: string,
+  username: string,
+  isAnonymous: boolean,
+  voiceId: KeyboardVoiceId
+): Promise<PlayerProfile> {
+  const voice = KEYBOARD_VOICES.find((v) => v.id === voiceId);
+  if (!voice) {
+    throw new Error('Unknown keyboard voice');
+  }
+  const profile = await getPlayerProfile(playerKey, username, isAnonymous);
+  if (profile.relics.length < voice.unlockRelics) {
+    throw new Error(
+      `Requires ${voice.unlockRelics} relics to unlock ${voice.name}`
+    );
+  }
+
+  await redis.hSet(profileKey(playerKey), { selectedVoice: voiceId });
+  return {
+    ...profile,
+    selectedVoice: voiceId,
   };
 }

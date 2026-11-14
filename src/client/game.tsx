@@ -13,6 +13,9 @@ import {
 import { createRoot } from 'react-dom/client';
 import type {
   CommitRollResponse,
+  KeyboardVoiceId,
+  OpenChestResponse,
+  PlayerProfile,
   StateResponse,
   SubmitAttemptResponse,
 } from '../shared/api';
@@ -20,6 +23,7 @@ import {
   FAIL_ACCURACY_THRESHOLD,
   FEAT_CATALOG,
   getTierForRoll,
+  RELIC_CATALOG,
   xpRequiredForLevel,
 } from '../shared/constants';
 import { generateMelody } from '../shared/melodyGenerator';
@@ -83,6 +87,10 @@ export const Game = () => {
   const [lastResult, setLastResult] = useState<SubmitAttemptResponse | null>(
     null
   );
+  const [chestReveal, setChestReveal] = useState<OpenChestResponse | null>(
+    null
+  );
+  const [openingChest, setOpeningChest] = useState(false);
   const [heckle, setHeckle] = useState(HECKLE_LINES[0]!);
 
   const demoTimersRef = useRef<number[]>([]);
@@ -109,6 +117,7 @@ export const Game = () => {
       .then((data: StateResponse) => {
         if (!active) return;
         setState(data);
+        soundEngine.setVoice(data.profile.selectedVoice);
         setPhase(data.daily.finalRoll !== null ? 'LISTEN' : 'ROLL');
       })
       .catch(() => {
@@ -196,10 +205,41 @@ export const Game = () => {
       setPlayIdx(0);
       setCorrectCount(0);
       setError(null);
+      setChestReveal(null);
       setPhase('ROLL');
     } catch {
       // ignore
     }
+  };
+
+  const handleOpenChest = async () => {
+    if (openingChest) return;
+    setOpeningChest(true);
+    try {
+      soundEngine.unlock();
+      const res = await fetch('/api/open-chest', { method: 'POST' });
+      if (!res.ok) return;
+      const data = (await res.json()) as OpenChestResponse;
+      setChestReveal(data);
+      setState((prev) =>
+        prev ? { ...prev, profile: data.profile, daily: data.daily } : prev
+      );
+      soundEngine.playFanfare();
+    } finally {
+      setOpeningChest(false);
+    }
+  };
+
+  const handleSelectVoice = async (voiceId: KeyboardVoiceId) => {
+    const res = await fetch('/api/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voiceId }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { profile: PlayerProfile };
+    soundEngine.setVoice(data.profile.selectedVoice);
+    setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
   };
 
   const handleTriggerRoll = (reroll: boolean) => {
@@ -765,6 +805,51 @@ export const Game = () => {
               </span>
             </div>
 
+            {state && state.daily.chestsEarned > state.daily.chestsOpened && (
+              <button
+                type="button"
+                disabled={openingChest}
+                onClick={() => void handleOpenChest()}
+                className="animate-gold-pulse w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-[#5a3412] via-[#7c4b1a] to-[#5a3412] text-[#ffe875] border-2 border-[#ffe875] shadow-lg cursor-pointer"
+              >
+                {openingChest
+                  ? 'Unlocking Chest...'
+                  : `🎁 Crack Open Mystery Chest! (${state.daily.chestsEarned - state.daily.chestsOpened} ready)`}
+              </button>
+            )}
+
+            {chestReveal &&
+              (() => {
+                const dropped = RELIC_CATALOG.find(
+                  (r) => r.id === chestReveal.relicId
+                );
+                if (!dropped) return null;
+                return (
+                  <div className="parchment-card w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left border-2 border-[#d4af37]">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-2xl shrink-0">{dropped.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#1c1208] truncate">
+                          {dropped.name} ({dropped.rarity.toUpperCase()})
+                        </p>
+                        <p className="text-[11px] text-[#6e4726]">
+                          {chestReveal.isDuplicate
+                            ? `Duplicate converted to +${chestReveal.bonusXp} Bonus XP!`
+                            : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length} collected)`}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowFeats(true)}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
+                    >
+                      Vault
+                    </button>
+                  </div>
+                );
+              })()}
+
             <ResultCard
               utcDate={lastResult.daily.utcDate}
               roll={finalRoll}
@@ -801,9 +886,10 @@ export const Game = () => {
       {showLeaderboard && (
         <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
       )}
-      {showFeats && (
+      {showFeats && state && (
         <FeatsModal
-          unlocked={state?.profile.feats ?? []}
+          profile={state.profile}
+          onSelectVoice={handleSelectVoice}
           onClose={() => setShowFeats(false)}
         />
       )}

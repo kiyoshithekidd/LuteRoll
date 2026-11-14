@@ -1,8 +1,10 @@
+import type { KeyboardVoiceId } from '../../shared/api';
 import { midiToFrequency } from '../../shared/melodyGenerator';
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private muted = false;
+  private voice: KeyboardVoiceId = 'grand_piano';
 
   constructor() {
     if (typeof document !== 'undefined') {
@@ -45,8 +47,16 @@ class SoundEngine {
     }
   }
 
+  public setVoice(voice: KeyboardVoiceId): void {
+    this.voice = voice;
+  }
+
+  public getVoice(): KeyboardVoiceId {
+    return this.voice;
+  }
+
   /**
-   * Warm tavern lute/piano hybrid note synthesis using Web Audio API.
+   * Synthesizes a note using the currently selected keyboard voice.
    */
   public playNote(midi: number, durationMs = 420): void {
     const ctx = this.ensureContext();
@@ -57,29 +67,107 @@ class SoundEngine {
     const freq = midiToFrequency(midi);
 
     const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0.001, now);
-    masterGain.gain.linearRampToValueAtTime(0.28, now + 0.012);
-    masterGain.gain.exponentialRampToValueAtTime(0.08, now + dur * 0.45);
-    masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.14);
-
-    // Warm low-pass filter that softens after the initial pluck
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(Math.min(4800, freq * 6), now);
-    filter.frequency.exponentialRampToValueAtTime(
-      Math.max(400, freq * 2.1),
-      now + dur
-    );
 
     const osc1 = ctx.createOscillator();
-    osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(freq, now);
-
     const osc2 = ctx.createOscillator();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(freq * 2, now);
     const osc2Gain = ctx.createGain();
-    osc2Gain.gain.setValueAtTime(0.18, now);
+
+    switch (this.voice) {
+      case 'harpsichord': {
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        osc2Gain.gain.setValueAtTime(0.24, now);
+        filter.frequency.setValueAtTime(Math.min(6200, freq * 8), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(700, freq * 2.5),
+          now + dur * 0.65
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.24, now + 0.006);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur * 0.9);
+        break;
+      }
+      case 'electric_piano': {
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 3, now);
+        osc2Gain.gain.setValueAtTime(0.22, now);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.02, now + 0.14);
+        filter.frequency.setValueAtTime(5000, now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.3, now + 0.01);
+        masterGain.gain.exponentialRampToValueAtTime(0.08, now + dur * 0.5);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.16);
+        break;
+      }
+      case 'cathedral_organ': {
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        osc2Gain.gain.setValueAtTime(0.16, now);
+        filter.frequency.setValueAtTime(Math.min(3600, freq * 4.5), now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.24, now + 0.03);
+        masterGain.gain.setValueAtTime(0.22, now + dur * 0.8);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.12);
+        break;
+      }
+      case 'arcane_synth': {
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc1.detune.setValueAtTime(-7, now);
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq, now);
+        osc2.detune.setValueAtTime(7, now);
+        osc2Gain.gain.setValueAtTime(0.5, now);
+        filter.frequency.setValueAtTime(Math.min(5400, freq * 7), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(450, freq * 2.2),
+          now + dur
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.2, now + 0.018);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.16);
+        break;
+      }
+      case 'celesta': {
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 4, now);
+        osc2Gain.gain.setValueAtTime(0.14, now);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.005, now + 0.18);
+        filter.frequency.setValueAtTime(7000, now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.28, now + 0.008);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.22);
+        break;
+      }
+      case 'grand_piano':
+      default: {
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        osc2Gain.gain.setValueAtTime(0.18, now);
+        filter.frequency.setValueAtTime(Math.min(4800, freq * 6), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(400, freq * 2.1),
+          now + dur
+        );
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.28, now + 0.012);
+        masterGain.gain.exponentialRampToValueAtTime(0.08, now + dur * 0.45);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.14);
+        break;
+      }
+    }
 
     osc1.connect(filter);
     osc2.connect(osc2Gain);
@@ -89,8 +177,8 @@ class SoundEngine {
 
     osc1.start(now);
     osc2.start(now);
-    osc1.stop(now + dur + 0.16);
-    osc2.stop(now + dur + 0.16);
+    osc1.stop(now + dur + 0.24);
+    osc2.stop(now + dur + 0.24);
   }
 
   public playWrongNote(): void {

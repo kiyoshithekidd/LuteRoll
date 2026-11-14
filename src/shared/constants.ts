@@ -191,3 +191,100 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     icon: '👑',
   },
 ] as const;
+
+export type RelicMeta = {
+  id: string;
+  name: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'mythic';
+  icon: string;
+};
+
+export const RELIC_CATALOG: readonly RelicMeta[] = [
+  // 8 Common
+  { id: 'ivory_keycap', name: 'Ivory Keycap', rarity: 'common', icon: '🎹' },
+  { id: 'brass_fork', name: 'Brass Tuning Fork', rarity: 'common', icon: '🔱' },
+  { id: 'maple_metro', name: 'Maple Metronome', rarity: 'common', icon: '⏳' },
+  { id: 'felt_damper', name: 'Felt Damper', rarity: 'common', icon: '🧶' },
+  { id: 'key_polish', name: 'Resin Key Polish', rarity: 'common', icon: '🧴' },
+  { id: 'pitch_pipe', name: 'Tin Pitch Pipe', rarity: 'common', icon: '🎺' },
+  { id: 'staff_scroll', name: 'Parchment Staff', rarity: 'common', icon: '📜' },
+  { id: 'candle_sheet', name: 'Candlelit Score', rarity: 'common', icon: '🕯️' },
+  // 7 Uncommon
+  { id: 'silver_capo', name: 'Silver Octave Key', rarity: 'uncommon', icon: '🗝️' },
+  { id: 'velvet_bench', name: 'Velvet Bench Pad', rarity: 'uncommon', icon: '🛋️' },
+  { id: 'ebony_sharp', name: 'Ebony Sharp Key', rarity: 'uncommon', icon: '⬛' },
+  { id: 'copper_coil', name: 'Copper String Coil', rarity: 'uncommon', icon: '🌀' },
+  { id: 'oak_stand', name: 'Oak Music Stand', rarity: 'uncommon', icon: '🪵' },
+  { id: 'tavern_book', name: 'Tavern Songbook', rarity: 'uncommon', icon: '📖' },
+  { id: 'gilded_pedals', name: 'Gilded Sustain Pedals', rarity: 'uncommon', icon: '🦶' },
+  // 6 Rare
+  { id: 'amber_box', name: 'Amber Resonance Box', rarity: 'rare', icon: '🔶' },
+  { id: 'sapphire_key', name: 'Sapphire Tuning Key', rarity: 'rare', icon: '💎' },
+  { id: 'clock_arp', name: 'Clockwork Arpeggiator', rarity: 'rare', icon: '⚙️' },
+  { id: 'moon_ring', name: 'Moonstone Chord Ring', rarity: 'rare', icon: '🌙' },
+  { id: 'dragon_hammer', name: 'Dragonbone Hammer', rarity: 'rare', icon: '🐉' },
+  { id: 'phantom_pedal', name: 'Phantom Reverb Pedal', rarity: 'rare', icon: '👻' },
+  // 3 Mythic
+  { id: 'grand_crown', name: 'Crown of the Keys', rarity: 'mythic', icon: '👑' },
+  { id: 'astral_board', name: 'Astral Soundboard', rarity: 'mythic', icon: '🌌' },
+  { id: 'conservatory_heart', name: 'Conservatory Heart', rarity: 'mythic', icon: '❤️‍🔥' },
+] as const;
+
+export type KeyboardVoiceMeta = {
+  id:
+    | 'grand_piano'
+    | 'harpsichord'
+    | 'electric_piano'
+    | 'cathedral_organ'
+    | 'arcane_synth'
+    | 'celesta';
+  name: string;
+  description: string;
+  unlockRelics: number;
+  icon: string;
+};
+
+export const KEYBOARD_VOICES: readonly KeyboardVoiceMeta[] = [
+  {
+    id: 'grand_piano',
+    name: 'Tavern Upright',
+    description: 'Warm wooden upright piano.',
+    unlockRelics: 0,
+    icon: '🎹',
+  },
+  {
+    id: 'harpsichord',
+    name: 'Baroque Harpsichord',
+    description: 'Crisp, plucked royal harpsichord.',
+    unlockRelics: 2,
+    icon: '🏰',
+  },
+  {
+    id: 'electric_piano',
+    name: 'Velvet Electric Keys',
+    description: 'Smooth bell-toned electric piano.',
+    unlockRelics: 5,
+    icon: '⚡',
+  },
+  {
+    id: 'cathedral_organ',
+    name: 'Cathedral Pipe Organ',
+    description: 'Rich, resonant multi-pipe organ.',
+    unlockRelics: 9,
+    icon: '⛪',
+  },
+  {
+    id: 'arcane_synth',
+    name: 'Arcane Lead Synth',
+    description: 'Detuned fantasy analog synth.',
+    unlockRelics: 14,
+    icon: '🔮',
+  },
+  {
+    id: 'celesta',
+    name: 'Starlight Celesta',
+    description: 'Crystalline bell-keyed celesta.',
+    unlockRelics: 19,
+    icon: '✨',
+  },
+] as const;

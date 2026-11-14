@@ -4,6 +4,7 @@ import type {
   CommitRollRequest,
   CommitRollResponse,
   ErrorResponse,
+  KeyboardVoiceId,
   ShareCommentRequest,
   ShareCommentResponse,
   StateResponse,
@@ -14,7 +15,9 @@ import {
   getDailyState,
   getLeaderboards,
   getPlayerProfile,
+  openMysteryChest,
   resetDailyState,
+  selectKeyboardVoice,
   submitAttempt,
 } from '../redisStore';
 import { syncBardUserFlair } from '../flairService';
@@ -264,4 +267,45 @@ api.post('/dev-reset', async (c) => {
     profile,
     daily,
   });
+});
+
+api.post('/open-chest', async (c) => {
+  try {
+    const player = await resolvePlayer();
+    const result = await openMysteryChest(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      player.snoovatarUrl
+    );
+    return c.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not open chest';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/voice', async (c) => {
+  try {
+    const body = (await c.req.json()) as { voiceId?: KeyboardVoiceId };
+    if (!body.voiceId) {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Missing voiceId' },
+        400
+      );
+    }
+    const player = await resolvePlayer();
+    const profile = await selectKeyboardVoice(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      body.voiceId
+    );
+    return c.json({ ok: true, profile });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not select voice';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
 });

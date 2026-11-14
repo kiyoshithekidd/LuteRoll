@@ -7,6 +7,16 @@ export type RareFeat =
   | 'streak30'
   | 'grinder5';
 
+export type RelicRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
+
+export type KeyboardVoiceId =
+  | 'grand_piano'
+  | 'harpsichord'
+  | 'electric_piano'
+  | 'cathedral_organ'
+  | 'arcane_synth'
+  | 'celesta';
+
 export type PlayerProfile = {
   username: string;
   isAnonymous: boolean;
@@ -16,6 +26,8 @@ export type PlayerProfile = {
   streak: number;
   lastPlayedDate: string | null;
   feats: RareFeat[];
+  relics: string[];
+  selectedVoice: KeyboardVoiceId;
   snoovatarUrl?: string | null;
 };
 
@@ -29,6 +41,17 @@ export type DailyState = {
   clearsCount: number;
   bestAccuracy: number;
   todayXp: number;
+  chestsEarned: number;
+  chestsOpened: number;
+};
+
+export type OpenChestResponse = {
+  type: 'open-chest';
+  relicId: string;
+  isDuplicate: boolean;
+  bonusXp: number;
+  profile: PlayerProfile;
+  daily: DailyState;
 };
 
 export type StateResponse = {
