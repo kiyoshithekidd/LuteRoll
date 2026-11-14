@@ -40,6 +40,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
+      },
+      {
+        "label": "Reset My Daily Roll (Dev)",
+        "description": "Clear your today's d20 roll on r/lute_roll_dev to test from start",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/reset-daily"
       }
     ]
   },

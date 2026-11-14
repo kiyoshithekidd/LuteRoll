@@ -85,6 +85,13 @@ export async function getDailyState(
   };
 }
 
+export async function resetDailyState(
+  playerKey: string,
+  utcDate = getUtcDateKey()
+): Promise<void> {
+  await redis.del(dailyKey(playerKey, utcDate));
+}
+
 export async function unlockFeatIfNew(
   playerKey: string,
   feat: RareFeat
