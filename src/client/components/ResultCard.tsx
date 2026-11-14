@@ -101,26 +101,26 @@ export function ResultCard({
   };
 
   return (
-    <div className="parchment-card w-full rounded-xl p-3.5 text-left space-y-2.5">
-      <div className="flex items-center justify-between border-b border-[#9c7538]/35 pb-1.5">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-[#6e4726]">
+    <div className="parchment-card w-full rounded-xl p-2.5 sm:p-3 text-left space-y-2">
+      <div className="flex items-center justify-between border-b border-[#9c7538]/35 pb-1">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6e4726]">
           Tavern Result Card
         </span>
-        <span className="text-[11px] text-[#6e4726]/85 font-semibold">
+        <span className="text-[10px] text-[#6e4726]/85 font-semibold">
           Next roll in {getUtcResetCountdown()}
         </span>
       </div>
 
-      <pre className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-[#1c1208]">
+      <pre className="font-mono text-[11px] leading-snug whitespace-pre-wrap text-[#1c1208]">
         {cardText}
       </pre>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
           onClick={() => void handlePostComment()}
           disabled={commentState === 'posting' || commentState === 'posted'}
-          className="py-2 px-2.5 rounded-lg font-bold text-xs bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#2f6f4e] cursor-pointer transition-colors disabled:opacity-70"
+          className="py-1.5 px-2 rounded-lg font-bold text-[11px] bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#2f6f4e] cursor-pointer transition-colors disabled:opacity-70"
         >
           {commentState === 'posting'
             ? 'Posting...'
@@ -134,7 +134,7 @@ export function ResultCard({
         <button
           type="button"
           onClick={() => void handleCopy()}
-          className="py-2 px-2.5 rounded-lg font-bold text-xs bg-[#2c1b0e] hover:bg-[#3e2614] text-[#ffe875] border border-[#9c7538] cursor-pointer transition-colors"
+          className="py-1.5 px-2 rounded-lg font-bold text-[11px] bg-[#2c1b0e] hover:bg-[#3e2614] text-[#ffe875] border border-[#9c7538] cursor-pointer transition-colors"
         >
           {copied ? '✓ Copied!' : '📋 Copy Card'}
         </button>
@@ -144,7 +144,7 @@ export function ResultCard({
         type="button"
         onClick={() => void handleSubscribe()}
         disabled={subState !== 'idle'}
-        className="w-full py-1.5 px-3 rounded-lg font-semibold text-[11px] bg-[#ead7b4] hover:bg-[#e1c89a] text-[#4a2e16] border border-[#9c7538]/50 cursor-pointer transition-colors disabled:opacity-75"
+        className="w-full py-1 px-2.5 rounded-lg font-semibold text-[10px] bg-[#ead7b4] hover:bg-[#e1c89a] text-[#4a2e16] border border-[#9c7538]/50 cursor-pointer transition-colors disabled:opacity-75"
       >
         {subState === 'joined'
           ? '✓ Subscribed to Community!'

@@ -28,7 +28,6 @@ import {
 } from '../shared/constants';
 import { generateMelody } from '../shared/melodyGenerator';
 import streakFlameUrl from './assets/streak-flame.webp';
-import bountySealUrl from './assets/bounty-seal.webp';
 import tomatoSplatUrl from './assets/tomato-splat.webp';
 import nat20SealUrl from './assets/nat20-seal.webp';
 import { soundEngine } from './audio/soundEngine';
@@ -425,33 +424,33 @@ export const Game = () => {
   return (
     <div className="tavern-stage-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-2.5">
       {/* Top Tavern HUD */}
-      <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex flex-col gap-2">
+      <header className="tavern-wood-frame rounded-xl px-3 py-2 flex flex-col gap-1.5">
         {/* Row 1: Title + Action Buttons */}
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-none whitespace-nowrap">
+        <div className="flex items-center justify-between gap-1.5">
+          <h1 className="font-serif text-base sm:text-xl font-bold text-[#ffe875] leading-none whitespace-nowrap">
             Lute Roll
           </h1>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={() => setShowLeaderboard(true)}
-              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
+              className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
               aria-label="Open leaderboards"
             >
-              🏆 Ranks
+              🏆<span className="hidden sm:inline"> Ranks</span>
             </button>
             <button
               type="button"
               onClick={() => setShowFeats(true)}
-              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
-              aria-label="Open trophy case"
+              className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
+              aria-label="Open tavern vault"
             >
               🎖️ {state?.profile.feats.length ?? 0}/{FEAT_CATALOG.length}
             </button>
             <button
               type="button"
               onClick={() => setShowGuide(true)}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] font-bold cursor-pointer"
+              className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] font-bold cursor-pointer"
               aria-label="How to play"
             >
               ?
@@ -459,7 +458,7 @@ export const Game = () => {
             <button
               type="button"
               onClick={toggleMute}
-              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
+              className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
               aria-label={muted ? 'Unmute audio' : 'Mute audio'}
             >
               {muted ? '🔇' : '🔊'}
@@ -468,10 +467,10 @@ export const Game = () => {
               <button
                 type="button"
                 onClick={() => void handleDevReset()}
-                className="text-[11px] px-2 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer whitespace-nowrap"
+                className="text-[11px] px-2 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer whitespace-nowrap"
                 title="Reset today's roll (dev subreddit only)"
               >
-                ↻ Reset
+                ↻<span className="hidden sm:inline"> Reset</span>
               </button>
             )}
           </div>
@@ -733,69 +732,77 @@ export const Game = () => {
         )}
 
         {phase === 'RESULTS' && lastResult && tier && finalRoll !== null && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center text-center gap-3.5">
+          <div className="tavern-wood-frame w-full rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-2.5">
             {lastResult.passed ? (
               <>
-                {lastResult.accuracy === 1 || finalRoll === 20 ? (
-                  <img
-                    src={nat20SealUrl}
-                    alt="Critical Seal"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-[#ffe875] shadow-lg"
-                  />
-                ) : (
-                  <div className="text-4xl">🎶</div>
-                )}
-                <div>
-                  <h2 className="font-serif text-2xl font-bold text-[#ffe875]">
-                    {lastResult.accuracy === 1
-                      ? 'Flawless Performance!'
-                      : 'The Tavern Cheers!'}
-                  </h2>
-                  <p className="text-sm text-[#f5ead2]/90 mt-0.5">
-                    {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
-                    <span className="font-bold text-[#ffe875]">
-                      +{lastResult.xpEarned} XP
-                    </span>
-                  </p>
+                <div className="w-full flex items-center justify-center gap-3 text-left">
+                  {lastResult.accuracy === 1 || finalRoll === 20 ? (
+                    <img
+                      src={nat20SealUrl}
+                      alt="Critical Seal"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-[#ffe875] shadow-md shrink-0"
+                    />
+                  ) : (
+                    <div className="text-3xl shrink-0">🎶</div>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
+                      {lastResult.accuracy === 1
+                        ? 'Flawless Performance!'
+                        : 'The Tavern Cheers!'}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-[#f5ead2]/90">
+                      {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
+                      <span className="font-bold text-[#ffe875]">
+                        +{lastResult.xpEarned} XP
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 {lastResult.leveledUp && (
-                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-2 text-xs font-bold text-[#ffe875]">
-                    🎉 Level Up! You are now Level {lastResult.profile.level}{' '}
+                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1.5 text-xs font-bold text-[#ffe875]">
+                    🎉 Level Up! Level {lastResult.profile.level}{' '}
                     {lastResult.profile.title}!
                   </div>
                 )}
-                {lastResult.unlockedFeat && (
-                  <div className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-2 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]">
-                    <img
-                      src={bountySealUrl}
-                      alt=""
-                      className="w-5 h-5 object-contain"
-                    />
-                    Rare Feat Unlocked: {lastResult.unlockedFeat.toUpperCase()}!
-                  </div>
-                )}
+                {lastResult.unlockedFeat &&
+                  (() => {
+                    const meta = FEAT_CATALOG.find(
+                      (f) => f.id === lastResult.unlockedFeat
+                    );
+                    return (
+                      <div className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-1.5 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]">
+                        <span>{meta?.icon ?? '🎖️'}</span>
+                        <span>
+                          Feat Unlocked: {meta?.title ?? lastResult.unlockedFeat}!
+                        </span>
+                      </div>
+                    );
+                  })()}
               </>
             ) : (
-              <div className="animate-tomato-splat flex flex-col items-center gap-1.5">
+              <div className="animate-tomato-splat w-full flex items-center justify-center gap-3 text-left">
                 <img
                   src={tomatoSplatUrl}
                   alt="Tomatoes Thrown"
-                  className="w-16 h-16 rounded-full object-cover border-2 border-red-400/70 shadow-lg"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
                 />
-                <h2 className="font-serif text-2xl font-bold text-red-300">
-                  Tomatoes Thrown!
-                </h2>
-                <p className="text-sm text-[#f5ead2]/90 italic">
-                  &ldquo;{heckle}&rdquo;
-                </p>
-                <p className="text-xs text-red-200/85 mt-0.5">
-                  {Math.round(lastResult.accuracy * 100)}% Accuracy (need{' '}
-                  {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}% to earn XP) • 0 XP
-                </p>
+                <div className="min-w-0">
+                  <h2 className="font-serif text-lg sm:text-xl font-bold text-red-300 leading-tight">
+                    Tomatoes Thrown!
+                  </h2>
+                  <p className="text-xs text-[#f5ead2]/90 italic truncate">
+                    &ldquo;{heckle}&rdquo;
+                  </p>
+                  <p className="text-[11px] text-red-200/85">
+                    {Math.round(lastResult.accuracy * 100)}% (need{' '}
+                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}%) • 0 XP
+                  </p>
+                </div>
               </div>
             )}
 
-            <div className="w-full flex items-center justify-center gap-3 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-3 py-1.5">
+            <div className="w-full flex items-center justify-center gap-3 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-2.5 py-1">
               <span>Plays: {lastResult.daily.attemptsCount}</span>
               <span>•</span>
               <span>Clears: {lastResult.daily.clearsCount}</span>
@@ -810,7 +817,7 @@ export const Game = () => {
                 type="button"
                 disabled={openingChest}
                 onClick={() => void handleOpenChest()}
-                className="animate-gold-pulse w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-[#5a3412] via-[#7c4b1a] to-[#5a3412] text-[#ffe875] border-2 border-[#ffe875] shadow-lg cursor-pointer"
+                className="animate-gold-pulse w-full py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-[#5a3412] via-[#7c4b1a] to-[#5a3412] text-[#ffe875] border-2 border-[#ffe875] shadow-lg cursor-pointer"
               >
                 {openingChest
                   ? 'Unlocking Chest...'
@@ -825,24 +832,24 @@ export const Game = () => {
                 );
                 if (!dropped) return null;
                 return (
-                  <div className="parchment-card w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left border-2 border-[#d4af37]">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-2xl shrink-0">{dropped.icon}</span>
+                  <div className="parchment-card w-full rounded-xl p-2.5 flex items-center justify-between gap-2 text-left border-2 border-[#d4af37]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xl shrink-0">{dropped.icon}</span>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[#1c1208] truncate">
                           {dropped.name} ({dropped.rarity.toUpperCase()})
                         </p>
                         <p className="text-[11px] text-[#6e4726]">
                           {chestReveal.isDuplicate
-                            ? `Duplicate converted to +${chestReveal.bonusXp} Bonus XP!`
-                            : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length} collected)`}
+                            ? `Duplicate: +${chestReveal.bonusXp} Bonus XP!`
+                            : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setShowFeats(true)}
-                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
                     >
                       Vault
                     </button>
@@ -859,18 +866,18 @@ export const Game = () => {
               profile={lastResult.profile}
             />
 
-            <div className="w-full flex gap-2.5">
+            <div className="w-full flex gap-2">
               <button
                 type="button"
                 onClick={() => setPhase('LISTEN')}
-                className="gold-btn flex-1 py-3 px-4 rounded-xl font-bold text-sm cursor-pointer"
+                className="gold-btn flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm cursor-pointer"
               >
                 Play Again (Grind XP)
               </button>
               <button
                 type="button"
                 onClick={() => setShowLeaderboard(true)}
-                className="py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer"
+                className="py-2.5 px-3.5 rounded-xl font-semibold text-xs sm:text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer"
               >
                 🏆 Ranks
               </button>
