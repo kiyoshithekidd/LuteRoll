@@ -3,7 +3,8 @@ import './index.css';
 import { context, requestExpandedMode } from '@devvit/web/client';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { StateResponse, TestRollResponse } from '../shared/api';
+import type { StateResponse } from '../shared/api';
+import { getTierForRoll } from '../shared/constants';
 
 function D20Emblem({ value }: { value: number | string }) {
   return (
@@ -42,8 +43,6 @@ function D20Emblem({ value }: { value: number | string }) {
 
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
-  const [rollResult, setRollResult] = useState<TestRollResponse | null>(null);
-  const [rolling, setRolling] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -60,32 +59,11 @@ export const Splash = () => {
     };
   }, []);
 
-  const handleQuickRoll = async () => {
-    if (rolling) return;
-    setRolling(true);
-    try {
-      const res = await fetch('/api/test-roll', { method: 'POST' });
-      if (res.ok) {
-        const data = (await res.json()) as TestRollResponse;
-        setRollResult(data);
-        setState((prev) =>
-          prev
-            ? {
-                ...prev,
-                lastTestRoll: data.roll,
-                testRollCount: data.testRollCount,
-              }
-            : prev
-        );
-      }
-    } finally {
-      setRolling(false);
-    }
-  };
-
-  const displayDie = rollResult?.roll ?? state?.lastTestRoll ?? 20;
-  const username = state?.username ?? context.username ?? 'Wandering Bard';
-  const utcDate = state?.utcDate ?? new Date().toISOString().slice(0, 10);
+  const username =
+    state?.profile.username ?? context.username ?? 'Wandering Bard';
+  const utcDate = state?.daily.utcDate ?? new Date().toISOString().slice(0, 10);
+  const finalRoll = state?.daily.finalRoll ?? null;
+  const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
 
   return (
     <main className="tavern-felt-bg min-h-screen w-full flex items-center justify-center p-3 sm:p-5">
@@ -97,51 +75,48 @@ export const Splash = () => {
           </span>
         </div>
 
-        <D20Emblem value={displayDie} />
+        <D20Emblem value={finalRoll ?? 'd20'} />
 
         <div className="space-y-1">
           <h1 className="font-serif text-3xl font-bold tracking-tight text-[#ffe875]">
             Lute Roll
           </h1>
           <p className="text-sm text-[#f5ead2]/85">
-            Welcome, <span className="font-semibold text-white">{username}</span>.
-            Roll a d20, learn the tune, earn the XP.
+            {state ? (
+              <>
+                <span className="font-semibold text-white">{username}</span> •
+                Lvl {state.profile.level} {state.profile.title}
+              </>
+            ) : (
+              'Roll a d20, learn the tune, earn the XP.'
+            )}
           </p>
         </div>
 
-        {rollResult ? (
+        {finalRoll !== null && tier ? (
           <div className="w-full rounded-xl bg-black/35 border border-[#d4af37]/40 px-3 py-2.5 text-sm">
             <p className="font-semibold text-[#ffe875]">
-              Test Roll: {rollResult.roll} — {rollResult.tierLabel}
+              Today&apos;s Roll: {finalRoll} ({tier.name} • {tier.xpMultiplier}x
+              XP)
             </p>
-            <p className="text-xs text-[#f5ead2]/70 mt-0.5">
-              Tavern placeholder verified • Total test rolls:{' '}
-              {rollResult.testRollCount}
+            <p className="text-xs text-[#f5ead2]/75 mt-0.5">
+              {state?.daily.attemptsCount ?? 0} plays today • +
+              {state?.daily.todayXp ?? 0} XP earned
             </p>
           </div>
         ) : (
-          <p className="text-xs text-[#f5ead2]/65">
-            Milestone 1 Playtest • {state?.testRollCount ?? 0} test rolls logged
+          <p className="text-xs text-[#f5ead2]/70">
+            Roll today&apos;s d20 to set your melody difficulty and XP payout.
           </p>
         )}
 
-        <div className="w-full flex flex-col sm:flex-row gap-2.5 pt-1">
-          <button
-            type="button"
-            onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-            className="gold-btn flex-1 py-3 px-4 rounded-xl font-bold text-sm tracking-wide cursor-pointer transition-transform"
-          >
-            Enter the Tavern
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleQuickRoll()}
-            disabled={rolling}
-            className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer transition-colors disabled:opacity-60"
-          >
-            {rolling ? 'Rolling...' : 'Test Roll d20'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+          className="gold-btn w-full py-3.5 px-5 rounded-xl font-bold text-base tracking-wide cursor-pointer transition-transform"
+        >
+          {finalRoll !== null ? 'Play Today’s Tune' : 'Enter the Tavern & Roll'}
+        </button>
       </section>
     </main>
   );

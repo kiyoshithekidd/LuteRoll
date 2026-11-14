@@ -1,124 +1,516 @@
 import './index.css';
 
-import { context } from '@devvit/web/client';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { StateResponse, TestRollResponse } from '../shared/api';
+import type {
+  CommitRollResponse,
+  StateResponse,
+  SubmitAttemptResponse,
+} from '../shared/api';
+import {
+  FAIL_ACCURACY_THRESHOLD,
+  getTierForRoll,
+} from '../shared/constants';
+import { generateMelody } from '../shared/melodyGenerator';
+import { soundEngine } from './audio/soundEngine';
+import { DiceTray3D } from './components/DiceTray3D';
+import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
+
+type Phase = 'LOADING' | 'ROLL' | 'LISTEN' | 'PLAY' | 'RESULTS';
+
+const HECKLE_LINES = [
+  'Boo! Get off the stage!',
+  'My ears! Even the tavern rat left!',
+  'More practice, less ale, bard!',
+  'The Tavern Keeper reaches for the tomatoes!',
+];
 
 export const Game = () => {
   const [state, setState] = useState<StateResponse | null>(null);
-  const [lastRoll, setLastRoll] = useState<TestRollResponse | null>(null);
-  const [rolling, setRolling] = useState(false);
+  const [phase, setPhase] = useState<Phase>('LOADING');
+  const [muted, setMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 3D Dice Tray state
+  const [rollTrigger, setRollTrigger] = useState(0);
+  const [isRolling, setIsRolling] = useState(false);
+  const [isRerollPending, setIsRerollPending] = useState(false);
+
+  // Listen & Play state
+  const [isPlayingDemo, setIsPlayingDemo] = useState(false);
+  const [highlightedMidi, setHighlightedMidi] = useState<number | null>(null);
+  const [playIdx, setPlayIdx] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [feedbackMidi, setFeedbackMidi] = useState<number | null>(null);
+  const [feedbackState, setFeedbackState] = useState<KeyFeedbackState>(null);
+
+  // Results state
+  const [lastResult, setLastResult] = useState<SubmitAttemptResponse | null>(
+    null
+  );
+  const [heckle, setHeckle] = useState(HECKLE_LINES[0]!);
+
+  const demoTimersRef = useRef<number[]>([]);
+  const feedbackTimerRef = useRef<number | null>(null);
+
+  const clearDemoTimers = useCallback(() => {
+    for (const id of demoTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    demoTimersRef.current = [];
+    setIsPlayingDemo(false);
+    setHighlightedMidi(null);
+  }, []);
 
   useEffect(() => {
     let active = true;
     fetch('/api/state')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
+      .then((res) =>
+        res.ok ? res.json() : Promise.reject(new Error('Failed to load state'))
+      )
       .then((data: StateResponse) => {
-        if (active) setState(data);
+        if (!active) return;
+        setState(data);
+        setPhase(data.daily.finalRoll !== null ? 'LISTEN' : 'ROLL');
       })
       .catch(() => {
-        if (active) setError('Could not reach the Tavern Keeper (/api/state).');
+        if (active) setError('Could not reach the Tavern Keeper.');
       });
+
     return () => {
       active = false;
+      clearDemoTimers();
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
     };
-  }, []);
+  }, [clearDemoTimers]);
 
-  const handleRoll = async () => {
-    if (rolling) return;
-    setRolling(true);
+  const melody = useMemo(() => {
+    if (!state || state.daily.finalRoll === null) return null;
+    return generateMelody(
+      state.daily.utcDate,
+      state.profile.username,
+      state.daily.finalRoll
+    );
+  }, [state]);
+
+  const toggleMute = () => {
+    const next = !muted;
+    setMuted(next);
+    soundEngine.setMuted(next);
+  };
+
+  const handleTriggerRoll = (reroll: boolean) => {
+    soundEngine.unlock();
     setError(null);
+    setIsRerollPending(reroll);
+    setIsRolling(true);
+    setRollTrigger((n) => n + 1);
+    setPhase('ROLL');
+  };
+
+  const handleDiceSettled = useCallback(
+    async (value: number) => {
+      setIsRolling(false);
+      if (value === 20) soundEngine.playFanfare();
+      else if (value === 1) soundEngine.playLowDrum();
+      else soundEngine.playNote(67, 260);
+
+      try {
+        const res = await fetch('/api/roll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roll: value, isReroll: isRerollPending }),
+        });
+        if (!res.ok) {
+          const errData = (await res.json()) as { message?: string };
+          throw new Error(errData.message ?? 'Roll failed');
+        }
+        const data = (await res.json()) as CommitRollResponse;
+        setState((prev) => (prev ? { ...prev, daily: data.daily } : prev));
+        setPhase('LISTEN');
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to lock in your roll.'
+        );
+      }
+    },
+    [isRerollPending]
+  );
+
+  const playMelodyDemo = useCallback(() => {
+    if (!melody || isPlayingDemo) return;
+    soundEngine.unlock();
+    clearDemoTimers();
+    setIsPlayingDemo(true);
+
+    melody.notes.forEach((midi, idx) => {
+      const startAt = idx * melody.tempoMs;
+      const t1 = window.setTimeout(() => {
+        setHighlightedMidi(midi);
+        soundEngine.playNote(midi, melody.tempoMs * 0.85);
+      }, startAt);
+      const t2 = window.setTimeout(() => {
+        setHighlightedMidi((curr) => (curr === midi ? null : curr));
+      }, startAt + melody.tempoMs * 0.72);
+      demoTimersRef.current.push(t1, t2);
+    });
+
+    const endTimer = window.setTimeout(() => {
+      setIsPlayingDemo(false);
+      setHighlightedMidi(null);
+    }, melody.notes.length * melody.tempoMs + 80);
+    demoTimersRef.current.push(endTimer);
+  }, [melody, isPlayingDemo, clearDemoTimers]);
+
+  const startAttempt = () => {
+    soundEngine.unlock();
+    clearDemoTimers();
+    setPlayIdx(0);
+    setCorrectCount(0);
+    setFeedbackMidi(null);
+    setFeedbackState(null);
+    setLastResult(null);
+    setPhase('PLAY');
+  };
+
+  const finishAttempt = async (finalCorrect: number, totalNotes: number) => {
+    const accuracy = totalNotes > 0 ? finalCorrect / totalNotes : 0;
     try {
-      const res = await fetch('/api/test-roll', { method: 'POST' });
-      if (!res.ok) throw new Error('Roll failed');
-      const data = (await res.json()) as TestRollResponse;
-      setLastRoll(data);
+      const res = await fetch('/api/attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accuracy }),
+      });
+      if (!res.ok) throw new Error('Failed to save attempt');
+      const data = (await res.json()) as SubmitAttemptResponse;
+      setLastResult(data);
       setState((prev) =>
         prev
           ? {
               ...prev,
-              lastTestRoll: data.roll,
-              testRollCount: data.testRollCount,
+              profile: data.profile,
+              daily: data.daily,
             }
           : prev
       );
+      if (!data.passed) {
+        setHeckle(
+          HECKLE_LINES[Math.floor(Math.random() * HECKLE_LINES.length)]!
+        );
+        soundEngine.playTomatoSplat();
+      } else if (data.leveledUp || accuracy === 1) {
+        soundEngine.playFanfare();
+      }
+      setPhase('RESULTS');
     } catch {
-      setError('The d20 bounced off the table. Try again.');
-    } finally {
-      setRolling(false);
+      setError('Could not save your performance to the tavern ledger.');
     }
   };
 
-  const username = state?.username ?? context.username ?? 'Wandering Bard';
-  const activeDie = lastRoll?.roll ?? state?.lastTestRoll;
+  const handleKeyPress = (midi: number) => {
+    if (phase !== 'PLAY' || !melody) return;
+    soundEngine.unlock();
+
+    const expected = melody.notes[playIdx];
+    if (expected === undefined) return;
+
+    const isCorrect = midi === expected;
+    if (isCorrect) {
+      soundEngine.playNote(midi, 320);
+    } else {
+      soundEngine.playWrongNote();
+    }
+
+    if (feedbackTimerRef.current !== null) {
+      window.clearTimeout(feedbackTimerRef.current);
+    }
+    setFeedbackMidi(midi);
+    setFeedbackState(isCorrect ? 'correct' : 'wrong');
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedbackMidi(null);
+      setFeedbackState(null);
+    }, 260);
+
+    const nextCorrect = correctCount + (isCorrect ? 1 : 0);
+    const nextIdx = playIdx + 1;
+    setCorrectCount(nextCorrect);
+    setPlayIdx(nextIdx);
+
+    if (nextIdx >= melody.notes.length) {
+      void finishAttempt(nextCorrect, melody.notes.length);
+    }
+  };
+
+  const finalRoll = state?.daily.finalRoll ?? null;
+  const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
 
   return (
-    <div className="tavern-felt-bg min-h-screen w-full flex flex-col justify-between p-4 sm:p-6">
-      <header className="tavern-wood-frame rounded-xl px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="font-serif text-xl font-bold text-[#ffe875]">
+    <div className="tavern-felt-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-3">
+      {/* Top Tavern HUD */}
+      <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
             Lute Roll
           </h1>
-          <p className="text-xs text-[#f5ead2]/75">
-            Bard: {username} • Level 1 Busker
+          <p className="text-[11px] sm:text-xs text-[#f5ead2]/80 truncate">
+            {state
+              ? `${state.profile.username} • Lvl ${state.profile.level} ${state.profile.title} • ${state.profile.totalXp} XP`
+              : 'Entering the tavern...'}
           </p>
         </div>
-        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-black/40 border border-[#d4af37]/40 text-[#ffe875]">
-          {state?.utcDate ?? 'UTC Today'}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {state && state.profile.streak > 0 && (
+            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-black/40 border border-amber-500/40 text-amber-300">
+              🔥 {state.profile.streak}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="text-xs px-2.5 py-1.5 rounded-lg bg-black/40 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
+            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+          >
+            {muted ? '🔇 Muted' : '🔊 Sound'}
+          </button>
+        </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center my-4">
-        <div className="tavern-wood-frame w-full max-w-md rounded-2xl p-6 flex flex-col items-center text-center gap-5">
-          <div className="tavern-felt-bg w-full rounded-xl border border-[#d4af37]/30 py-8 px-4 flex flex-col items-center gap-3 shadow-inner">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#ffe875] via-[#d4af37] to-[#8a6412] flex items-center justify-center shadow-lg border-2 border-[#fff3b0]">
-              <span className="font-serif text-4xl font-bold text-[#1c1208]">
-                {activeDie ?? 'd20'}
+      {error && (
+        <div className="w-full max-w-lg mx-auto text-xs text-red-200 bg-red-950/75 border border-red-500/50 rounded-xl px-3 py-2 text-center">
+          {error}
+        </div>
+      )}
+
+      {/* Main Stage */}
+      <main className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto">
+        {phase === 'LOADING' && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-6 text-center text-sm text-[#f5ead2]/80">
+            Tuning the lute strings...
+          </div>
+        )}
+
+        {phase === 'ROLL' && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-4 text-center">
+            <div>
+              <h2 className="font-serif text-xl font-bold text-[#ffe875]">
+                {isRerollPending ? 'Daily Reroll' : "Roll Today's d20"}
+              </h2>
+              <p className="text-xs text-[#f5ead2]/75 mt-0.5">
+                High roll = easier tune • Nat 20 = 3.0x crit payout • Nat 1 =
+                Brutal 3.0x
+              </p>
+            </div>
+
+            {rollTrigger > 0 ? (
+              <DiceTray3D
+                rollTrigger={rollTrigger}
+                onSettled={(v) => void handleDiceSettled(v)}
+              />
+            ) : (
+              <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#5a3a1e] flex flex-col items-center justify-center gap-2 shadow-inner">
+                <span className="font-serif text-5xl font-bold text-[#ffe875]/90">
+                  d20
+                </span>
+                <span className="text-xs text-[#f5ead2]/70">
+                  Tap below to toss the gold die onto the felt
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={isRolling}
+              onClick={() => handleTriggerRoll(isRerollPending)}
+              className="gold-btn w-full py-3.5 px-5 rounded-xl font-bold text-base cursor-pointer disabled:opacity-60"
+            >
+              {isRolling ? 'Rolling...' : 'Toss the d20'}
+            </button>
+          </div>
+        )}
+
+        {phase === 'LISTEN' && melody && tier && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ffe875] text-[#1c1208]">
+                    Rolled {finalRoll}
+                  </span>
+                  <span className="text-sm font-bold text-[#ffe875]">
+                    {tier.name} • {tier.xpMultiplier}x XP
+                  </span>
+                </div>
+                <p className="text-xs text-[#f5ead2]/75 mt-1">
+                  {melody.notes.length} notes • Listen to the tune, then tap it
+                  back
+                </p>
+              </div>
+              {state && !state.daily.rerollUsed && (
+                <button
+                  type="button"
+                  onClick={() => handleTriggerRoll(true)}
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-black/60 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer shrink-0"
+                >
+                  🎲 Reroll (1 left)
+                </button>
+              )}
+            </div>
+
+            {finalRoll === 20 && (
+              <div className="rounded-xl bg-amber-500/20 border border-amber-300/60 px-3 py-2 text-center text-xs font-bold text-[#ffe875]">
+                ✨ CRITICAL SUCCESS! Easiest tune with 3.0x XP payout!
+              </div>
+            )}
+            {finalRoll === 1 && (
+              <div className="rounded-xl bg-red-950/70 border border-red-400/50 px-3 py-2 text-center text-xs font-bold text-red-200">
+                💀 BRUTAL! Hardest tune, clearable for 3.0x XP!
+              </div>
+            )}
+
+            <Keyboard
+              highlightedMidi={highlightedMidi}
+              feedbackMidi={null}
+              feedbackState={null}
+              disabled
+              onKeyPress={() => {}}
+            />
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                disabled={isPlayingDemo}
+                onClick={playMelodyDemo}
+                className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer disabled:opacity-60"
+              >
+                {isPlayingDemo ? 'Playing...' : '🎵 Listen'}
+              </button>
+              <button
+                type="button"
+                onClick={startAttempt}
+                className="gold-btn flex-1 py-3 px-4 rounded-xl font-bold text-sm cursor-pointer"
+              >
+                🎹 Play It Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'PLAY' && melody && tier && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-[#ffe875]">
+                Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
+                {melody.notes.length}
+              </span>
+              <span className="text-[#f5ead2]/80">
+                Hits: {correctCount}/{playIdx}
               </span>
             </div>
 
-            {lastRoll ? (
-              <div className="space-y-1">
-                <p className="text-lg font-bold text-[#ffe875]">
-                  Rolled {lastRoll.roll}
-                </p>
-                <p className="text-sm text-[#f5ead2]/90">{lastRoll.tierLabel}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-[#f5ead2]/80 max-w-xs">
-                Dark green felt tray ready. Tap Roll to test the server &amp;
-                Redis round-trip.
-              </p>
-            )}
+            {/* Progress pips */}
+            <div className="flex gap-1 w-full">
+              {melody.notes.map((_, idx) => (
+                <div
+                  key={idx}
+                  className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    idx < playIdx
+                      ? 'bg-[#d4af37]'
+                      : idx === playIdx
+                        ? 'bg-[#ffe875]'
+                        : 'bg-black/40'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <Keyboard
+              highlightedMidi={null}
+              feedbackMidi={feedbackMidi}
+              feedbackState={feedbackState}
+              onKeyPress={handleKeyPress}
+            />
+
+            <button
+              type="button"
+              onClick={() => setPhase('LISTEN')}
+              className="text-xs text-[#f5ead2]/70 hover:text-white underline self-center cursor-pointer pt-1"
+            >
+              Listen again before finishing
+            </button>
           </div>
+        )}
 
-          {error && (
-            <p className="text-xs text-red-300 bg-red-950/60 border border-red-500/40 rounded-lg px-3 py-2 w-full">
-              {error}
-            </p>
-          )}
+        {phase === 'RESULTS' && lastResult && tier && (
+          <div className="tavern-wood-frame w-full rounded-2xl p-5 flex flex-col items-center text-center gap-4">
+            {lastResult.passed ? (
+              <>
+                <div className="text-4xl">
+                  {lastResult.accuracy === 1 ? '🏆' : '🎶'}
+                </div>
+                <div>
+                  <h2 className="font-serif text-2xl font-bold text-[#ffe875]">
+                    {lastResult.accuracy === 1
+                      ? 'Flawless Performance!'
+                      : 'The Tavern Cheers!'}
+                  </h2>
+                  <p className="text-sm text-[#f5ead2]/85 mt-1">
+                    {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
+                    <span className="font-bold text-[#ffe875]">
+                      +{lastResult.xpEarned} XP
+                    </span>
+                  </p>
+                </div>
+                {lastResult.leveledUp && (
+                  <div className="w-full rounded-xl bg-amber-500/20 border border-amber-300/60 px-3 py-2 text-xs font-bold text-[#ffe875]">
+                    🎉 Level Up! You are now Level {lastResult.profile.level}{' '}
+                    {lastResult.profile.title}!
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-4xl">🍅🍅🍅</div>
+                <div>
+                  <h2 className="font-serif text-2xl font-bold text-red-300">
+                    Tomatoes Thrown!
+                  </h2>
+                  <p className="text-sm text-[#f5ead2]/85 mt-1 italic">
+                    &ldquo;{heckle}&rdquo;
+                  </p>
+                  <p className="text-xs text-red-200/80 mt-2">
+                    {Math.round(lastResult.accuracy * 100)}% Accuracy (need{' '}
+                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}% to earn XP) • 0
+                    XP
+                  </p>
+                </div>
+              </>
+            )}
 
-          <button
-            type="button"
-            onClick={() => void handleRoll()}
-            disabled={rolling}
-            className="gold-btn w-full py-3.5 px-6 rounded-xl font-bold text-base tracking-wide cursor-pointer transition-transform disabled:opacity-60"
-          >
-            {rolling ? 'Rolling the d20...' : 'Roll d20 (Milestone 1 Test)'}
-          </button>
+            <div className="w-full rounded-xl bg-black/35 border border-[#d4af37]/30 px-3 py-2.5 text-xs text-[#f5ead2]/80 flex justify-between">
+              <span>Today&apos;s Plays: {lastResult.daily.attemptsCount}</span>
+              <span>Today&apos;s XP: +{lastResult.daily.todayXp}</span>
+              <span>
+                Best: {Math.round(lastResult.daily.bestAccuracy * 100)}%
+              </span>
+            </div>
 
-          <p className="text-xs text-[#f5ead2]/60">
-            Milestone 1 Placeholder • Redis test rolls:{' '}
-            {state?.testRollCount ?? 0} • 3D physics d20 &amp; Web Audio
-            keyboard arrive in Milestone 2
-          </p>
-        </div>
+            <div className="w-full flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPhase('LISTEN')}
+                className="gold-btn flex-1 py-3 px-4 rounded-xl font-bold text-sm cursor-pointer"
+              >
+                Play Again (Grind XP)
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       <footer className="text-center text-[11px] text-[#f5ead2]/50">
-        Lute Roll • Devvit Web Playtest • r/luteroll
+        Lute Roll • UTC {state?.daily.utcDate ?? ''} • r/luteroll
       </footer>
     </div>
   );

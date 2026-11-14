@@ -1,24 +1,36 @@
 import { Hono } from 'hono';
-import { context, reddit, redis } from '@devvit/web/server';
+import { context, reddit } from '@devvit/web/server';
 import type {
+  CommitRollRequest,
+  CommitRollResponse,
   ErrorResponse,
   StateResponse,
-  TestRollResponse,
+  SubmitAttemptRequest,
 } from '../../shared/api';
+import {
+  commitRoll,
+  getDailyState,
+  getPlayerProfile,
+  submitAttempt,
+} from '../redisStore';
 
 export const api = new Hono();
 
-function getUtcDateKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getTierLabel(roll: number): string {
-  if (roll === 20) return 'Trivial (Nat 20 • Critical Success!)';
-  if (roll >= 17) return 'Easy';
-  if (roll >= 13) return 'Medium';
-  if (roll >= 8) return 'Hard';
-  if (roll >= 2) return 'Very Hard';
-  return 'Brutal (Nat 1!)';
+async function resolvePlayer() {
+  const username = await reddit.getCurrentUsername();
+  if (username) {
+    return {
+      playerKey: `u:${username}`,
+      username,
+      isAnonymous: false,
+    };
+  }
+  const fallbackId = context.userId ?? context.postId ?? 'guest';
+  return {
+    playerKey: `anon:${fallbackId}`,
+    username: 'Wandering Bard',
+    isAnonymous: true,
+  };
 }
 
 api.get('/state', async (c) => {
@@ -32,19 +44,17 @@ api.get('/state', async (c) => {
   }
 
   try {
-    const [username, countStr, lastRollStr] = await Promise.all([
-      reddit.getCurrentUsername(),
-      redis.get(`m1:post:${postId}:roll_count`),
-      redis.get(`m1:post:${postId}:last_roll`),
+    const player = await resolvePlayer();
+    const [profile, daily] = await Promise.all([
+      getPlayerProfile(player.playerKey, player.username, player.isAnonymous),
+      getDailyState(player.playerKey),
     ]);
 
     return c.json<StateResponse>({
       type: 'state',
       postId,
-      username: username ?? 'Wandering Bard',
-      utcDate: getUtcDateKey(),
-      lastTestRoll: lastRollStr ? parseInt(lastRollStr, 10) : null,
-      testRollCount: countStr ? parseInt(countStr, 10) : 0,
+      profile,
+      daily,
     });
   } catch (error) {
     const message =
@@ -53,10 +63,8 @@ api.get('/state', async (c) => {
   }
 });
 
-api.post('/test-roll', async (c) => {
-  const { postId } = context;
-
-  if (!postId) {
+api.post('/roll', async (c) => {
+  if (!context.postId) {
     return c.json<ErrorResponse>(
       { status: 'error', message: 'postId is required' },
       400
@@ -64,22 +72,71 @@ api.post('/test-roll', async (c) => {
   }
 
   try {
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const [testRollCount] = await Promise.all([
-      redis.incrBy(`m1:post:${postId}:roll_count`, 1),
-      redis.set(`m1:post:${postId}:last_roll`, String(roll)),
-    ]);
+    const body = await c.req.json<CommitRollRequest>();
+    if (
+      typeof body.roll !== 'number' ||
+      Number.isNaN(body.roll) ||
+      body.roll < 1 ||
+      body.roll > 20
+    ) {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Invalid roll value (must be 1..20)' },
+        400
+      );
+    }
 
-    return c.json<TestRollResponse>({
-      type: 'test-roll',
-      postId,
-      roll,
-      tierLabel: getTierLabel(roll),
-      testRollCount,
+    const player = await resolvePlayer();
+    const daily = await commitRoll(
+      player.playerKey,
+      body.roll,
+      Boolean(body.isReroll)
+    );
+
+    return c.json<CommitRollResponse>({
+      type: 'roll',
+      daily,
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Failed to roll test d20';
-    return c.json<ErrorResponse>({ status: 'error', message }, 500);
+      error instanceof Error ? error.message : 'Failed to commit roll';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/attempt', async (c) => {
+  if (!context.postId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'postId is required' },
+      400
+    );
+  }
+
+  try {
+    const body = await c.req.json<SubmitAttemptRequest>();
+    if (
+      typeof body.accuracy !== 'number' ||
+      Number.isNaN(body.accuracy) ||
+      body.accuracy < 0 ||
+      body.accuracy > 1
+    ) {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Invalid accuracy value (must be 0..1)' },
+        400
+      );
+    }
+
+    const player = await resolvePlayer();
+    const result = await submitAttempt(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      body.accuracy
+    );
+
+    return c.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to record attempt';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
   }
 });
