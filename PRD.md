@@ -3,7 +3,6 @@
 **Working title:** Lute Roll
 **Version:** 1.0 (Nov 12, 2026)
 **Owner:** Kiyoshi Kidd
-**Build tool:** Antigravity with Gemini
 **Platform:** Devvit Web (React), as a Reddit Interactive Post
 **Subreddit:** r/luteroll (verified available Nov 12, 2026; created Nov 12, 2026, the game lives there)
 **Subreddit description (short):** "Roll a d20, learn the tune, earn the XP. Lute Roll is a daily melody game: your roll sets the difficulty, then you listen and tap the melody back on the keys. Nat 20 means an easy tune with a huge payout. Nat 1 means the hardest tune, and the tavern throws tomatoes if you botch it. Play daily, keep your streak, climb from Busker to Legend of the Tavern."
@@ -145,7 +144,7 @@ Kiyoshi asked this directly, and it is a hard constraint. [decided, verified Nov
 
 ## 12. Technical requirements
 
-- **Stack:** Devvit Web, React. Build with Antigravity and Gemini, Kiyoshi's normal build setup.
+- **Stack:** Devvit Web, React, TypeScript, Hono, Redis, Three.js, Tailwind CSS, Web Audio API.
 - **Surface:** a Reddit Interactive Post in r/luteroll. Mobile-first; most players are on phones.
 - **State:** per-player, per-day state stored through Devvit (roll, reroll used, attempts, XP, streak, level, flair). The daily seed uses the UTC date so every player shares the same day boundary. [proposed: UTC date; confirm in build]
 - **Melody generation:** client-side, deterministic from (date, final roll). No server round trip per melody.

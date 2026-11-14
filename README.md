@@ -41,9 +41,8 @@ Devvit Web, React, TypeScript, Hono, Redis, Three.js, Tailwind CSS, and Web Audi
 
 ## Docs
 
-- PRD.md: the full product requirements document, built from a player interview on Nov 12, 2026.
-- antigravity-prompt.md: the starter prompt for building Milestone 1 in Antigravity, including what to borrow from College of Keys and what to leave behind.
-- assets/ASSETS.md: the asset manifest, every borrowed asset with its source in the College of Keys repo.
+- PRD.md: the full product requirements document.
+- assets/ASSETS.md: the asset manifest, every asset with its source.
 
 ## Inspiration, not a copy
 
