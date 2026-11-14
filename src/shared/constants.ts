@@ -434,3 +434,68 @@ export const KEYBOARD_VOICES: readonly KeyboardVoiceMeta[] = [
     icon: '👑',
   },
 ] as const;
+
+export const DUPE_PITY_THRESHOLD = 3;
+
+export type DailyBountyId =
+  | 'accuracy90'
+  | 'runs3'
+  | 'flawless'
+  | 'clear2'
+  | 'accuracy85';
+
+export type DailyBountyMeta = {
+  id: DailyBountyId;
+  title: string;
+  description: string;
+  bonusXp: number;
+  icon: string;
+};
+
+export const DAILY_BOUNTIES: readonly DailyBountyMeta[] = [
+  {
+    id: 'accuracy90',
+    title: 'Precision Encore',
+    description: 'Clear today’s melody with 90%+ accuracy.',
+    bonusXp: 60,
+    icon: '🎯',
+  },
+  {
+    id: 'runs3',
+    title: 'Tavern Regular',
+    description: 'Complete 3 runs today (pass or fail).',
+    bonusXp: 50,
+    icon: '🍻',
+  },
+  {
+    id: 'flawless',
+    title: 'Golden Standard',
+    description: 'Score 100% accuracy on any run today.',
+    bonusXp: 80,
+    icon: '✨',
+  },
+  {
+    id: 'clear2',
+    title: 'Double Encore',
+    description: 'Clear today’s melody 2 times.',
+    bonusXp: 60,
+    icon: '🔁',
+  },
+  {
+    id: 'accuracy85',
+    title: 'Steady Hands',
+    description: 'Clear today’s melody with 85%+ accuracy.',
+    bonusXp: 50,
+    icon: '🎵',
+  },
+] as const;
+
+export function getDailyBounty(utcDate: string): DailyBountyMeta {
+  let hash = 0;
+  for (let i = 0; i < utcDate.length; i += 1) {
+    hash = (hash * 31 + utcDate.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(hash) % DAILY_BOUNTIES.length;
+  return DAILY_BOUNTIES[idx]!;
+}
+

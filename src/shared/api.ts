@@ -38,6 +38,8 @@ export type PlayerProfile = {
   level: number;
   title: string;
   streak: number;
+  streakFreezes: number;
+  dupePity: number;
   lastPlayedDate: string | null;
   feats: RareFeat[];
   relics: string[];
@@ -57,12 +59,14 @@ export type DailyState = {
   todayXp: number;
   chestsEarned: number;
   chestsOpened: number;
+  bountyClaimed: boolean;
 };
 
 export type OpenChestResponse = {
   type: 'open-chest';
   relicId: string;
   isDuplicate: boolean;
+  pityTriggered?: boolean;
   bonusXp: number;
   unlockedFeat?: RareFeat | null;
   profile: PlayerProfile;
@@ -98,6 +102,8 @@ export type SubmitAttemptResponse = {
   passed: boolean;
   accuracy: number;
   xpEarned: number;
+  bountyCompletedXp?: number;
+  streakSavedByFreeze?: boolean;
   leveledUp: boolean;
   previousLevel: number;
   unlockedFeat: RareFeat | null;

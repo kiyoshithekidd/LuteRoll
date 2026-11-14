@@ -1,7 +1,9 @@
 import { redis } from '@devvit/web/server';
 import {
   BASE_XP_PER_RUN,
+  DUPE_PITY_THRESHOLD,
   FAIL_ACCURACY_THRESHOLD,
+  getDailyBounty,
   getLevelFromXp,
   getTierForRoll,
   getTitleForLevel,
@@ -25,6 +27,11 @@ export function getUtcDateKey(date = new Date()): string {
 
 export function getYesterdayUtcKey(date = new Date()): string {
   const prev = new Date(date.getTime() - 86_400_000);
+  return prev.toISOString().slice(0, 10);
+}
+
+export function getTwoDaysAgoUtcKey(date = new Date()): string {
+  const prev = new Date(date.getTime() - 2 * 86_400_000);
   return prev.toISOString().slice(0, 10);
 }
 
@@ -69,6 +76,8 @@ export async function getPlayerProfile(
   const level = getLevelFromXp(totalXp);
   const title = getTitleForLevel(level);
   const streak = data.streak ? parseInt(data.streak, 10) : 0;
+  const streakFreezes = data.streakFreezes ? parseInt(data.streakFreezes, 10) : 0;
+  const dupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
   const relics = parseStringArray(data.relics);
@@ -86,6 +95,8 @@ export async function getPlayerProfile(
     level,
     title,
     streak,
+    streakFreezes,
+    dupePity,
     lastPlayedDate,
     feats,
     relics,
@@ -111,6 +122,7 @@ export async function getDailyState(
     todayXp: data.todayXp ? parseInt(data.todayXp, 10) : 0,
     chestsEarned: data.chestsEarned ? parseInt(data.chestsEarned, 10) : 0,
     chestsOpened: data.chestsOpened ? parseInt(data.chestsOpened, 10) : 0,
+    bountyClaimed: data.bountyClaimed === '1',
   };
 }
 
@@ -190,6 +202,7 @@ export async function submitAttempt(
   const accuracy = Math.max(0, Math.min(1, rawAccuracy));
   const utcDate = getUtcDateKey();
   const yesterdayUtc = getYesterdayUtcKey();
+  const twoDaysAgoUtc = getTwoDaysAgoUtcKey();
   const dKey = dailyKey(playerKey, utcDate);
   const pKey = profileKey(playerKey);
 
@@ -204,28 +217,62 @@ export async function submitAttempt(
 
   const tier = getTierForRoll(daily.finalRoll);
   const passed = accuracy >= FAIL_ACCURACY_THRESHOLD;
-  const xpEarned = passed
+  const baseXpEarned = passed
     ? Math.round(BASE_XP_PER_RUN * tier.xpMultiplier * accuracy)
     : 0;
 
+  const newAttemptsCount = daily.attemptsCount + 1;
+  const newClearsCount = daily.clearsCount + (passed ? 1 : 0);
+  const newBestAccuracy = Math.max(daily.bestAccuracy, accuracy);
+
+  let bountyCompletedXp = 0;
+  let newBountyClaimed = daily.bountyClaimed;
+  if (!daily.bountyClaimed) {
+    const bounty = getDailyBounty(utcDate);
+    const completed =
+      (bounty.id === 'accuracy90' && passed && accuracy >= 0.9) ||
+      (bounty.id === 'runs3' && newAttemptsCount >= 3) ||
+      (bounty.id === 'flawless' && passed && accuracy >= 1) ||
+      (bounty.id === 'clear2' && newClearsCount >= 2) ||
+      (bounty.id === 'accuracy85' && passed && accuracy >= 0.85);
+    if (completed) {
+      bountyCompletedXp = bounty.bonusXp;
+      newBountyClaimed = true;
+    }
+  }
+
+  const xpEarned = baseXpEarned + bountyCompletedXp;
   const previousLevel = profile.level;
   const newTotalXp = profile.totalXp + xpEarned;
   const newLevel = getLevelFromXp(newTotalXp);
   const newTitle = getTitleForLevel(newLevel);
   const leveledUp = newLevel > previousLevel;
-
-  const newAttemptsCount = daily.attemptsCount + 1;
-  const newClearsCount = daily.clearsCount + (passed ? 1 : 0);
-  const newBestAccuracy = Math.max(daily.bestAccuracy, accuracy);
   const newTodayXp = daily.todayXp + xpEarned;
 
   let newStreak = profile.streak;
+  let newStreakFreezes = profile.streakFreezes;
+  let streakSavedByFreeze = false;
   let newLastPlayedDate = profile.lastPlayedDate;
 
   if (passed && profile.lastPlayedDate !== utcDate) {
-    newStreak =
-      profile.lastPlayedDate === yesterdayUtc ? profile.streak + 1 : 1;
+    if (profile.lastPlayedDate === yesterdayUtc) {
+      newStreak = profile.streak + 1;
+    } else if (
+      profile.lastPlayedDate === twoDaysAgoUtc &&
+      profile.streakFreezes > 0
+    ) {
+      newStreak = profile.streak + 1;
+      newStreakFreezes = profile.streakFreezes - 1;
+      streakSavedByFreeze = true;
+    } else {
+      newStreak = 1;
+    }
     newLastPlayedDate = utcDate;
+
+    // Earn a Streak Freeze at every 5-day streak milestone (max 1 held)
+    if (newStreak >= 5 && newStreak % 5 === 0 && newStreakFreezes < 1) {
+      newStreakFreezes = 1;
+    }
   }
 
   const nextFeats = [...profile.feats];
@@ -274,6 +321,7 @@ export async function submitAttempt(
       bestAccuracy: newBestAccuracy.toFixed(4),
       todayXp: String(newTodayXp),
       chestsEarned: String(newChestsEarned),
+      bountyClaimed: newBountyClaimed ? '1' : '0',
     }),
     redis.hSet(pKey, {
       username,
@@ -281,6 +329,7 @@ export async function submitAttempt(
       level: String(newLevel),
       title: newTitle,
       streak: String(newStreak),
+      streakFreezes: String(newStreakFreezes),
       lastPlayedDate: newLastPlayedDate ?? '',
       feats: JSON.stringify(nextFeats),
       ...(resolvedAvatar ? { snoovatarUrl: resolvedAvatar } : {}),
@@ -305,6 +354,8 @@ export async function submitAttempt(
     passed,
     accuracy,
     xpEarned,
+    bountyCompletedXp,
+    streakSavedByFreeze,
     leveledUp,
     previousLevel,
     unlockedFeat,
@@ -315,6 +366,8 @@ export async function submitAttempt(
       level: newLevel,
       title: newTitle,
       streak: newStreak,
+      streakFreezes: newStreakFreezes,
+      dupePity: profile.dupePity,
       lastPlayedDate: newLastPlayedDate,
       feats: nextFeats,
       relics: profile.relics,
@@ -328,6 +381,7 @@ export async function submitAttempt(
       bestAccuracy: newBestAccuracy,
       todayXp: newTodayXp,
       chestsEarned: newChestsEarned,
+      bountyClaimed: newBountyClaimed,
     },
   };
 }
@@ -430,10 +484,26 @@ export async function openMysteryChest(
           : 'common';
 
   const pool = RELIC_CATALOG.filter((item) => item.rarity === rarity);
-  const picked = pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
-  const isDuplicate = profile.relics.includes(picked.id);
+  let picked = pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
+  let isDuplicate = profile.relics.includes(picked.id);
+  let pityTriggered = false;
+  let nextDupePity = isDuplicate ? profile.dupePity + 1 : 0;
+
+  if (isDuplicate && nextDupePity >= DUPE_PITY_THRESHOLD) {
+    const unowned = RELIC_CATALOG.filter(
+      (item) => !profile.relics.includes(item.id)
+    );
+    if (unowned.length > 0) {
+      picked = unowned[Math.floor(Math.random() * unowned.length)]!;
+      isDuplicate = false;
+      pityTriggered = true;
+      nextDupePity = 0;
+    }
+  }
+
+  const effectiveRarity = picked.rarity;
   const bonusXp = isDuplicate
-    ? rarity === 'mythic' || rarity === 'rare'
+    ? effectiveRarity === 'mythic' || effectiveRarity === 'rare'
       ? 60
       : 30
     : 0;
@@ -460,7 +530,7 @@ export async function openMysteryChest(
   if (nextRelics.length >= 12) grant('voice6');
   if (nextRelics.length >= 15) grant('relic15');
   if (nextRelics.length >= 30) grant('relic30');
-  if (rarity === 'mythic') grant('mythic_relic');
+  if (effectiveRarity === 'mythic') grant('mythic_relic');
   if (newLevel >= 25) grant('level25');
 
   const updates: Promise<unknown>[] = [
@@ -471,6 +541,7 @@ export async function openMysteryChest(
     redis.hSet(pKey, {
       relics: JSON.stringify(nextRelics),
       feats: JSON.stringify(nextFeats),
+      dupePity: String(nextDupePity),
       xp: String(newTotalXp),
       level: String(newLevel),
       title: newTitle,
@@ -490,12 +561,14 @@ export async function openMysteryChest(
     type: 'open-chest',
     relicId: picked.id,
     isDuplicate,
+    pityTriggered,
     bonusXp,
     unlockedFeat,
     profile: {
       ...profile,
       relics: nextRelics,
       feats: nextFeats,
+      dupePity: nextDupePity,
       totalXp: newTotalXp,
       level: newLevel,
       title: newTitle,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { KeyboardVoiceId, PlayerProfile, RareFeat } from '../../shared/api';
 import {
+  DUPE_PITY_THRESHOLD,
   FEAT_CATALOG,
   KEYBOARD_VOICES,
   RELIC_CATALOG,
@@ -132,10 +133,14 @@ export function FeatsModal({
         <div className="overflow-y-auto space-y-2 pr-0.5 flex-1">
           {tab === 'relics' && (
             <>
-              <p className="text-[11px] text-[#f5ead2]/80">
-                Clear your daily tune to earn a Mystery Chest! Collect relics to
-                unlock new piano, organ &amp; synth voices.
-              </p>
+              <div className="flex items-center justify-between gap-2 text-[11px] text-[#f5ead2]/80">
+                <span>
+                  Crack Mystery Chests to collect relics &amp; unlock voices.
+                </span>
+                <span className="shrink-0 px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/35 text-[#ffe875] font-bold">
+                  Pity: {profile.dupePity}/{DUPE_PITY_THRESHOLD}
+                </span>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {RELIC_CATALOG.map((relic) => {
                   const owned = unlockedRelics.has(relic.id);

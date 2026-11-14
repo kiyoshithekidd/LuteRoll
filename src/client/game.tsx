@@ -20,8 +20,10 @@ import type {
   SubmitAttemptResponse,
 } from '../shared/api';
 import {
+  DUPE_PITY_THRESHOLD,
   FAIL_ACCURACY_THRESHOLD,
   FEAT_CATALOG,
+  getDailyBounty,
   getTierForRoll,
   getWardOfGraceCharges,
   RELIC_CATALOG,
@@ -521,16 +523,26 @@ export const Game = () => {
                 : 'Entering the tavern...'}
             </p>
           </div>
-          {state && state.profile.streak > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/45 border border-amber-400/40 text-amber-200 shrink-0">
-              <img
-                src={streakFlameUrl}
-                alt="Streak"
-                className="w-3.5 h-3.5 object-contain"
-              />
-              {state.profile.streak}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {state && state.profile.streakFreezes > 0 && (
+              <span
+                title="Tavern Streak Freeze: auto-saves your streak if you miss 1 day"
+                className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-950/70 border border-sky-400/50 text-sky-200"
+              >
+                🧊 {state.profile.streakFreezes}
+              </span>
+            )}
+            {state && state.profile.streak > 0 && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/45 border border-amber-400/40 text-amber-200">
+                <img
+                  src={streakFlameUrl}
+                  alt="Streak"
+                  className="w-3.5 h-3.5 object-contain"
+                />
+                {state.profile.streak}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Row 3: XP Bar */}
@@ -573,6 +585,26 @@ export const Game = () => {
                 High roll = easier tune • Nat 20 = 3.0x crit payout • Nat 1 =
                 Brutal 3.0x
               </p>
+              {state &&
+                (() => {
+                  const bounty = getDailyBounty(state.daily.utcDate);
+                  return (
+                    <div
+                      className={`mt-2 inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${
+                        state.daily.bountyClaimed
+                          ? 'bg-emerald-950/60 border-emerald-400/50 text-emerald-200'
+                          : 'bg-black/40 border-[#d4af37]/40 text-[#ffe875]'
+                      }`}
+                    >
+                      <span>{bounty.icon}</span>
+                      <span className="font-bold">
+                        {state.daily.bountyClaimed
+                          ? `Bounty Claimed (+${bounty.bonusXp} XP)`
+                          : `Bounty: ${bounty.description} (+${bounty.bonusXp} XP)`}
+                      </span>
+                    </div>
+                  );
+                })()}
               {state &&
                 state.profile.totalXp === 0 &&
                 state.daily.attemptsCount === 0 && (
@@ -813,6 +845,18 @@ export const Game = () => {
                     {lastResult.profile.title}!
                   </div>
                 )}
+                {lastResult.streakSavedByFreeze && (
+                  <div className="w-full rounded-xl bg-sky-950/70 border border-sky-400/60 px-3 py-1.5 text-xs font-bold text-sky-200">
+                    🧊 Streak Freeze saved your {lastResult.profile.streak}-day
+                    streak!
+                  </div>
+                )}
+                {Boolean(lastResult.bountyCompletedXp) && (
+                  <div className="w-full rounded-xl bg-emerald-950/70 border border-emerald-400/60 px-3 py-1.5 text-xs font-bold text-emerald-200">
+                    🎯 Daily Bounty Complete! +{lastResult.bountyCompletedXp}{' '}
+                    Bonus XP!
+                  </div>
+                )}
                 {lastResult.unlockedFeat &&
                   (() => {
                     const meta = FEAT_CATALOG.find(
@@ -844,7 +888,10 @@ export const Game = () => {
                   </p>
                   <p className="text-[11px] text-red-200/85">
                     {Math.round(lastResult.accuracy * 100)}% (need{' '}
-                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}%) • 0 XP
+                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}%) •{' '}
+                    {lastResult.bountyCompletedXp
+                      ? `+${lastResult.bountyCompletedXp} Bounty XP`
+                      : '0 XP'}
                   </p>
                 </div>
               </div>
@@ -889,8 +936,10 @@ export const Game = () => {
                         </p>
                         <p className="text-[11px] text-[#6e4726]">
                           {chestReveal.isDuplicate
-                            ? `Duplicate: +${chestReveal.bonusXp} Bonus XP!`
-                            : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
+                            ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
+                            : chestReveal.pityTriggered
+                              ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                              : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
                         </p>
                       </div>
                     </div>
