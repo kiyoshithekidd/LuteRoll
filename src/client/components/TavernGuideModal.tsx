@@ -12,8 +12,8 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
       aria-modal="true"
       aria-label="Tavern Guide"
     >
-      <div className="tavern-wood-frame w-full max-w-md rounded-2xl p-4 flex flex-col gap-3 max-h-[85vh]">
-        <div className="flex items-center justify-between">
+      <div className="tavern-wood-frame w-full max-w-md rounded-2xl p-4 flex flex-col gap-3 max-h-[90vh] min-h-0 overflow-hidden">
+        <div className="flex items-center justify-between shrink-0">
           <h2 className="font-serif text-xl font-bold text-[#ffe875]">
             📜 Tavern Guide
           </h2>
@@ -26,7 +26,10 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
           </button>
         </div>
 
-        <div className="parchment-card rounded-xl p-3.5 overflow-y-auto space-y-3 text-xs text-[#26160a]">
+        <div
+          className="parchment-card rounded-xl p-3.5 min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y space-y-3 text-xs text-[#26160a]"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           <div>
             <h3 className="font-bold uppercase tracking-wider text-[#6e4726] mb-1">
               How to Play
