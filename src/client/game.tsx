@@ -26,18 +26,19 @@ import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import { soundEngine } from './audio/soundEngine';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
-
-const DiceTray3D = lazy(() =>
-  import('./components/DiceTray3D').then((m) => ({ default: m.DiceTray3D }))
-);
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ResultCard } from './components/ResultCard';
+import { TavernGuideModal } from './components/TavernGuideModal';
 import {
   trackAppReady,
   trackJourneyEnd,
   trackJourneyProgress,
   trackJourneyStart,
 } from './telemetry';
+
+const DiceTray3D = lazy(() =>
+  import('./components/DiceTray3D').then((m) => ({ default: m.DiceTray3D }))
+);
 
 type Phase = 'LOADING' | 'ROLL' | 'LISTEN' | 'PLAY' | 'RESULTS';
 
@@ -53,18 +54,23 @@ export const Game = () => {
   const [phase, setPhase] = useState<Phase>('LOADING');
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 3D Dice Tray state
   const [rollTrigger, setRollTrigger] = useState(0);
   const [isRolling, setIsRolling] = useState(false);
   const [isRerollPending, setIsRerollPending] = useState(false);
+  const [settledBannerValue, setSettledBannerValue] = useState<number | null>(
+    null
+  );
 
   // Listen & Play state
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [highlightedMidi, setHighlightedMidi] = useState<number | null>(null);
   const [playIdx, setPlayIdx] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
+  const [noteResults, setNoteResults] = useState<('hit' | 'miss')[]>([]);
   const [feedbackMidi, setFeedbackMidi] = useState<number | null>(null);
   const [feedbackState, setFeedbackState] = useState<KeyFeedbackState>(null);
 
@@ -76,6 +82,8 @@ export const Game = () => {
 
   const demoTimersRef = useRef<number[]>([]);
   const feedbackTimerRef = useRef<number | null>(null);
+  const rollPauseTimerRef = useRef<number | null>(null);
+  const shouldAutoPlayNextListenRef = useRef(false);
 
   const clearDemoTimers = useCallback(() => {
     for (const id of demoTimersRef.current) {
@@ -89,7 +97,7 @@ export const Game = () => {
   useEffect(() => {
     trackAppReady();
     let active = true;
-    fetch('/api/state')
+    void fetch('/api/state')
       .then((res) =>
         res.ok ? res.json() : Promise.reject(new Error('Failed to load state'))
       )
@@ -108,6 +116,9 @@ export const Game = () => {
       if (feedbackTimerRef.current !== null) {
         window.clearTimeout(feedbackTimerRef.current);
       }
+      if (rollPauseTimerRef.current !== null) {
+        window.clearTimeout(rollPauseTimerRef.current);
+      }
     };
   }, [clearDemoTimers]);
 
@@ -120,6 +131,44 @@ export const Game = () => {
     );
   }, [state]);
 
+  const playMelodyDemo = useCallback(() => {
+    if (!melody || isPlayingDemo) return;
+    soundEngine.unlock();
+    clearDemoTimers();
+    setIsPlayingDemo(true);
+    trackJourneyProgress(0.55, 'listen_melody');
+
+    melody.notes.forEach((midi, idx) => {
+      const startAt = idx * melody.tempoMs;
+      const t1 = window.setTimeout(() => {
+        setHighlightedMidi(midi);
+        soundEngine.playNote(midi, melody.tempoMs * 0.85);
+      }, startAt);
+      const t2 = window.setTimeout(() => {
+        setHighlightedMidi((curr) => (curr === midi ? null : curr));
+      }, startAt + melody.tempoMs * 0.72);
+      demoTimersRef.current.push(t1, t2);
+    });
+
+    const endTimer = window.setTimeout(() => {
+      setIsPlayingDemo(false);
+      setHighlightedMidi(null);
+    }, melody.notes.length * melody.tempoMs + 80);
+    demoTimersRef.current.push(endTimer);
+  }, [melody, isPlayingDemo, clearDemoTimers]);
+
+  // Auto-play melody once after a fresh d20 roll transitions into LISTEN
+  useEffect(() => {
+    if (phase === 'LISTEN' && shouldAutoPlayNextListenRef.current && melody) {
+      shouldAutoPlayNextListenRef.current = false;
+      const t = window.setTimeout(() => {
+        playMelodyDemo();
+      }, 220);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [phase, melody, playMelodyDemo]);
+
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
@@ -130,6 +179,7 @@ export const Game = () => {
     soundEngine.unlock();
     trackJourneyStart();
     setError(null);
+    setSettledBannerValue(null);
     setIsRerollPending(reroll);
     setIsRolling(true);
     setRollTrigger((n) => n + 1);
@@ -139,6 +189,7 @@ export const Game = () => {
   const handleDiceSettled = useCallback(
     async (value: number) => {
       setIsRolling(false);
+      setSettledBannerValue(value);
       if (value === 20) soundEngine.playFanfare();
       else if (value === 1) soundEngine.playLowDrum();
       else soundEngine.playNote(67, 260);
@@ -172,8 +223,17 @@ export const Game = () => {
               }
             : prev
         );
-        setPhase('LISTEN');
+
+        if (rollPauseTimerRef.current !== null) {
+          window.clearTimeout(rollPauseTimerRef.current);
+        }
+        rollPauseTimerRef.current = window.setTimeout(() => {
+          setSettledBannerValue(null);
+          shouldAutoPlayNextListenRef.current = true;
+          setPhase('LISTEN');
+        }, 950);
       } catch (err) {
+        setSettledBannerValue(null);
         setError(
           err instanceof Error ? err.message : 'Failed to lock in your roll.'
         );
@@ -182,118 +242,101 @@ export const Game = () => {
     [isRerollPending]
   );
 
-  const playMelodyDemo = useCallback(() => {
-    if (!melody || isPlayingDemo) return;
-    soundEngine.unlock();
-    clearDemoTimers();
-    setIsPlayingDemo(true);
-    trackJourneyProgress(0.55, 'listen_melody');
-
-    melody.notes.forEach((midi, idx) => {
-      const startAt = idx * melody.tempoMs;
-      const t1 = window.setTimeout(() => {
-        setHighlightedMidi(midi);
-        soundEngine.playNote(midi, melody.tempoMs * 0.85);
-      }, startAt);
-      const t2 = window.setTimeout(() => {
-        setHighlightedMidi((curr) => (curr === midi ? null : curr));
-      }, startAt + melody.tempoMs * 0.72);
-      demoTimersRef.current.push(t1, t2);
-    });
-
-    const endTimer = window.setTimeout(() => {
-      setIsPlayingDemo(false);
-      setHighlightedMidi(null);
-    }, melody.notes.length * melody.tempoMs + 80);
-    demoTimersRef.current.push(endTimer);
-  }, [melody, isPlayingDemo, clearDemoTimers]);
-
   const startAttempt = () => {
     soundEngine.unlock();
     trackJourneyStart();
     clearDemoTimers();
     setPlayIdx(0);
     setCorrectCount(0);
+    setNoteResults([]);
     setFeedbackMidi(null);
     setFeedbackState(null);
     setLastResult(null);
     setPhase('PLAY');
   };
 
-  const finishAttempt = async (finalCorrect: number, totalNotes: number) => {
-    const accuracy = totalNotes > 0 ? finalCorrect / totalNotes : 0;
-    try {
-      const res = await fetch('/api/attempt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accuracy }),
-      });
-      if (!res.ok) throw new Error('Failed to save attempt');
-      const data = (await res.json()) as SubmitAttemptResponse;
-      setLastResult(data);
-      setState((prev) =>
-        prev
-          ? {
-              ...prev,
-              profile: data.profile,
-              daily: data.daily,
-            }
-          : prev
-      );
-      trackJourneyEnd(data.passed, data.xpEarned);
-
-      if (!data.passed) {
-        setHeckle(
-          HECKLE_LINES[Math.floor(Math.random() * HECKLE_LINES.length)]!
+  const finishAttempt = useCallback(
+    async (finalCorrect: number, totalNotes: number) => {
+      const accuracy = totalNotes > 0 ? finalCorrect / totalNotes : 0;
+      try {
+        const res = await fetch('/api/attempt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accuracy }),
+        });
+        if (!res.ok) throw new Error('Failed to save attempt');
+        const data = (await res.json()) as SubmitAttemptResponse;
+        setLastResult(data);
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                profile: data.profile,
+                daily: data.daily,
+              }
+            : prev
         );
-        soundEngine.playTomatoSplat();
-      } else if (data.leveledUp || accuracy === 1) {
-        soundEngine.playFanfare();
+        trackJourneyEnd(data.passed, data.xpEarned);
+
+        if (!data.passed) {
+          setHeckle(
+            HECKLE_LINES[Math.floor(Math.random() * HECKLE_LINES.length)]!
+          );
+          soundEngine.playTomatoSplat();
+        } else if (data.leveledUp || accuracy === 1) {
+          soundEngine.playFanfare();
+        }
+        setPhase('RESULTS');
+      } catch {
+        setError('Could not save your performance to the tavern ledger.');
       }
-      setPhase('RESULTS');
-    } catch {
-      setError('Could not save your performance to the tavern ledger.');
-    }
-  };
+    },
+    []
+  );
 
-  const handleKeyPress = (midi: number) => {
-    if (phase !== 'PLAY' || !melody) return;
-    soundEngine.unlock();
+  const handleKeyPress = useCallback(
+    (midi: number) => {
+      if (phase !== 'PLAY' || !melody) return;
+      soundEngine.unlock();
 
-    const expected = melody.notes[playIdx];
-    if (expected === undefined) return;
+      const expected = melody.notes[playIdx];
+      if (expected === undefined) return;
 
-    const isCorrect = midi === expected;
-    if (isCorrect) {
-      soundEngine.playNote(midi, 320);
-    } else {
-      soundEngine.playWrongNote();
-    }
+      const isCorrect = midi === expected;
+      if (isCorrect) {
+        soundEngine.playNote(midi, 320);
+      } else {
+        soundEngine.playWrongNote();
+      }
 
-    if (feedbackTimerRef.current !== null) {
-      window.clearTimeout(feedbackTimerRef.current);
-    }
-    setFeedbackMidi(midi);
-    setFeedbackState(isCorrect ? 'correct' : 'wrong');
-    feedbackTimerRef.current = window.setTimeout(() => {
-      setFeedbackMidi(null);
-      setFeedbackState(null);
-    }, 260);
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+      setFeedbackMidi(midi);
+      setFeedbackState(isCorrect ? 'correct' : 'wrong');
+      feedbackTimerRef.current = window.setTimeout(() => {
+        setFeedbackMidi(null);
+        setFeedbackState(null);
+      }, 260);
 
-    const nextCorrect = correctCount + (isCorrect ? 1 : 0);
-    const nextIdx = playIdx + 1;
-    setCorrectCount(nextCorrect);
-    setPlayIdx(nextIdx);
+      const nextCorrect = correctCount + (isCorrect ? 1 : 0);
+      const nextIdx = playIdx + 1;
+      setNoteResults((prev) => [...prev, isCorrect ? 'hit' : 'miss']);
+      setCorrectCount(nextCorrect);
+      setPlayIdx(nextIdx);
 
-    if (nextIdx >= melody.notes.length) {
-      void finishAttempt(nextCorrect, melody.notes.length);
-    }
-  };
+      if (nextIdx >= melody.notes.length) {
+        void finishAttempt(nextCorrect, melody.notes.length);
+      }
+    },
+    [phase, melody, playIdx, correctCount, finishAttempt]
+  );
 
   const finalRoll = state?.daily.finalRoll ?? null;
   const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
+  const settledTier =
+    settledBannerValue !== null ? getTierForRoll(settledBannerValue) : null;
 
-  // XP progress bar calculation
   const level = state?.profile.level ?? 1;
   const totalXp = state?.profile.totalXp ?? 0;
   const currLevelXp = xpRequiredForLevel(level);
@@ -342,6 +385,14 @@ export const Game = () => {
               aria-label="Open leaderboards"
             >
               🏆 Ranks
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowGuide(true)}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] font-bold cursor-pointer"
+              aria-label="How to play"
+            >
+              ?
             </button>
             <button
               type="button"
@@ -396,37 +447,58 @@ export const Game = () => {
               </p>
             </div>
 
-            {rollTrigger > 0 ? (
-              <Suspense
-                fallback={
-                  <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex items-center justify-center text-xs text-[#ffe875]">
-                    Preparing dice tray...
-                  </div>
-                }
-              >
-                <DiceTray3D
-                  rollTrigger={rollTrigger}
-                  onSettled={(v) => void handleDiceSettled(v)}
-                />
-              </Suspense>
-            ) : (
-              <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex flex-col items-center justify-center gap-2 shadow-inner">
-                <span className="font-serif text-5xl font-bold text-[#ffe875] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-                  d20
-                </span>
-                <span className="text-xs text-[#f5ead2]/80">
-                  Tap below to toss the gold die onto the felt
-                </span>
-              </div>
-            )}
+            <div className="relative w-full">
+              {rollTrigger > 0 ? (
+                <Suspense
+                  fallback={
+                    <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex items-center justify-center text-xs text-[#ffe875]">
+                      Preparing dice tray...
+                    </div>
+                  }
+                >
+                  <DiceTray3D
+                    rollTrigger={rollTrigger}
+                    onSettled={(v) => void handleDiceSettled(v)}
+                  />
+                </Suspense>
+              ) : (
+                <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex flex-col items-center justify-center gap-2 shadow-inner">
+                  <span className="font-serif text-5xl font-bold text-[#ffe875] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+                    d20
+                  </span>
+                  <span className="text-xs text-[#f5ead2]/80">
+                    Tap below to toss the gold die onto the felt
+                  </span>
+                </div>
+              )}
+
+              {settledBannerValue !== null && settledTier && (
+                <div className="absolute inset-0 bg-black/55 rounded-xl flex flex-col items-center justify-center gap-1 p-4 animate-tomato-splat">
+                  <span className="font-serif text-4xl font-bold text-[#ffe875] drop-shadow">
+                    {settledBannerValue === 20
+                      ? '✨ NAT 20! ✨'
+                      : settledBannerValue === 1
+                        ? '💀 NAT 1! 💀'
+                        : `Rolled ${settledBannerValue}`}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-white bg-black/50 px-3 py-1 rounded-full border border-[#d4af37]/50">
+                    {settledTier.name} • {settledTier.xpMultiplier}x XP
+                  </span>
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
-              disabled={isRolling}
+              disabled={isRolling || settledBannerValue !== null}
               onClick={() => handleTriggerRoll(isRerollPending)}
               className="gold-btn w-full py-3.5 px-5 rounded-xl font-bold text-base cursor-pointer disabled:opacity-60"
             >
-              {isRolling ? 'Rolling...' : 'Toss the d20'}
+              {isRolling
+                ? 'Rolling...'
+                : settledBannerValue !== null
+                  ? 'Setting the Stage...'
+                  : 'Toss the d20'}
             </button>
           </div>
         )}
@@ -444,8 +516,7 @@ export const Game = () => {
                   </span>
                 </div>
                 <p className="text-xs text-[#f5ead2]/80 mt-1">
-                  {melody.notes.length} notes • Listen to the tune, then tap it
-                  back
+                  {melody.notes.length} notes • Highlighted keys are in play
                 </p>
               </div>
               {state && !state.daily.rerollUsed && (
@@ -475,6 +546,7 @@ export const Game = () => {
                 highlightedMidi={highlightedMidi}
                 feedbackMidi={null}
                 feedbackState={null}
+                activeTier={tier}
                 disabled
                 onKeyPress={() => {}}
               />
@@ -487,7 +559,7 @@ export const Game = () => {
                 onClick={playMelodyDemo}
                 className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer disabled:opacity-60"
               >
-                {isPlayingDemo ? 'Playing...' : '🎵 Listen'}
+                {isPlayingDemo ? 'Playing...' : '🎵 Replay Tune'}
               </button>
               <button
                 type="button"
@@ -513,18 +585,23 @@ export const Game = () => {
             </div>
 
             <div className="flex gap-1 w-full">
-              {melody.notes.map((_, idx) => (
-                <div
-                  key={idx}
-                  className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    idx < playIdx
-                      ? 'bg-[#d4af37]'
+              {melody.notes.map((_, idx) => {
+                const res = noteResults[idx];
+                const pipClass =
+                  res === 'hit'
+                    ? 'bg-emerald-400'
+                    : res === 'miss'
+                      ? 'bg-red-500'
                       : idx === playIdx
                         ? 'bg-[#ffe875]'
-                        : 'bg-black/45'
-                  }`}
-                />
-              ))}
+                        : 'bg-black/45';
+                return (
+                  <div
+                    key={idx}
+                    className={`h-2 flex-1 rounded-full transition-colors ${pipClass}`}
+                  />
+                );
+              })}
             </div>
 
             <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
@@ -532,6 +609,7 @@ export const Game = () => {
                 highlightedMidi={null}
                 feedbackMidi={feedbackMidi}
                 feedbackState={feedbackState}
+                activeTier={tier}
                 onKeyPress={handleKeyPress}
               />
             </div>
@@ -635,6 +713,7 @@ export const Game = () => {
       {showLeaderboard && (
         <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
       )}
+      {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
     </div>
   );
 };
