@@ -23,6 +23,7 @@ import {
   FAIL_ACCURACY_THRESHOLD,
   FEAT_CATALOG,
   getTierForRoll,
+  getWardOfGraceCharges,
   RELIC_CATALOG,
   xpRequiredForLevel,
 } from '../shared/constants';
@@ -78,7 +79,10 @@ export const Game = () => {
   const [highlightedMidi, setHighlightedMidi] = useState<number | null>(null);
   const [playIdx, setPlayIdx] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [noteResults, setNoteResults] = useState<('hit' | 'miss')[]>([]);
+  const [noteResults, setNoteResults] = useState<('hit' | 'grace' | 'miss')[]>([]);
+  const [graceRemaining, setGraceRemaining] = useState(0);
+  const [graceUsedThisRun, setGraceUsedThisRun] = useState(false);
+  const [graceBanner, setGraceBanner] = useState(false);
   const [feedbackMidi, setFeedbackMidi] = useState<number | null>(null);
   const [feedbackState, setFeedbackState] = useState<KeyFeedbackState>(null);
 
@@ -315,6 +319,9 @@ export const Game = () => {
     setPlayIdx(0);
     setCorrectCount(0);
     setNoteResults([]);
+    setGraceRemaining(getWardOfGraceCharges(state?.profile.streak ?? 0));
+    setGraceUsedThisRun(false);
+    setGraceBanner(false);
     setFeedbackMidi(null);
     setFeedbackState(null);
     setLastResult(null);
@@ -322,13 +329,13 @@ export const Game = () => {
   };
 
   const finishAttempt = useCallback(
-    async (finalCorrect: number, totalNotes: number) => {
+    async (finalCorrect: number, totalNotes: number, graceUsed: boolean) => {
       const accuracy = totalNotes > 0 ? finalCorrect / totalNotes : 0;
       try {
         const res = await fetch('/api/attempt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accuracy }),
+          body: JSON.stringify({ accuracy, graceUsed }),
         });
         if (!res.ok) throw new Error('Failed to save attempt');
         const data = (await res.json()) as SubmitAttemptResponse;
@@ -368,12 +375,22 @@ export const Game = () => {
       const expected = melody.notes[playIdx];
       if (expected === undefined) return;
 
-      const isCorrect = midi === expected;
+      const isExactHit = midi === expected;
+      const wardTriggered = !isExactHit && graceRemaining > 0;
+      const countedAsHit = isExactHit || wardTriggered;
+
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate(isCorrect ? 10 : 28);
+        navigator.vibrate(
+          wardTriggered ? [12, 30, 12] : isExactHit ? 10 : 28
+        );
       }
-      if (isCorrect) {
+      if (isExactHit) {
         soundEngine.playNote(midi, 320);
+      } else if (wardTriggered) {
+        soundEngine.playNote(expected, 280);
+        setGraceRemaining((prev) => Math.max(0, prev - 1));
+        setGraceUsedThisRun(true);
+        setGraceBanner(true);
       } else {
         soundEngine.playWrongNote();
       }
@@ -382,23 +399,35 @@ export const Game = () => {
         window.clearTimeout(feedbackTimerRef.current);
       }
       setFeedbackMidi(midi);
-      setFeedbackState(isCorrect ? 'correct' : 'wrong');
+      setFeedbackState(countedAsHit ? 'correct' : 'wrong');
       feedbackTimerRef.current = window.setTimeout(() => {
         setFeedbackMidi(null);
         setFeedbackState(null);
       }, 260);
 
-      const nextCorrect = correctCount + (isCorrect ? 1 : 0);
+      const nextCorrect = correctCount + (countedAsHit ? 1 : 0);
       const nextIdx = playIdx + 1;
-      setNoteResults((prev) => [...prev, isCorrect ? 'hit' : 'miss']);
+      const nextGraceUsed = graceUsedThisRun || wardTriggered;
+      setNoteResults((prev) => [
+        ...prev,
+        isExactHit ? 'hit' : wardTriggered ? 'grace' : 'miss',
+      ]);
       setCorrectCount(nextCorrect);
       setPlayIdx(nextIdx);
 
       if (nextIdx >= melody.notes.length) {
-        void finishAttempt(nextCorrect, melody.notes.length);
+        void finishAttempt(nextCorrect, melody.notes.length, nextGraceUsed);
       }
     },
-    [phase, melody, playIdx, correctCount, finishAttempt]
+    [
+      phase,
+      melody,
+      playIdx,
+      correctCount,
+      graceRemaining,
+      graceUsedThisRun,
+      finishAttempt,
+    ]
   );
 
   const finalRoll = state?.daily.finalRoll ?? null;
@@ -681,15 +710,32 @@ export const Game = () => {
 
         {phase === 'PLAY' && melody && tier && (
           <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between text-xs gap-2">
               <span className="font-bold text-[#ffe875]">
                 Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
                 {melody.notes.length}
               </span>
+              {getWardOfGraceCharges(state?.profile.streak ?? 0) > 0 && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    graceRemaining > 0
+                      ? 'bg-sky-900/60 border-sky-400/70 text-sky-200'
+                      : 'bg-black/40 border-white/15 text-[#f5ead2]/50'
+                  }`}
+                >
+                  🛡️ Ward ×{graceRemaining}
+                </span>
+              )}
               <span className="text-[#f5ead2]/85">
                 Hits: {correctCount}/{playIdx}
               </span>
             </div>
+
+            {graceBanner && (
+              <div className="rounded-lg bg-sky-900/50 border border-sky-400/60 px-2.5 py-1 text-[11px] font-bold text-sky-200 text-center">
+                🪄 Ward of Grace absorbed a missed note!
+              </div>
+            )}
 
             <div className="flex gap-1 w-full">
               {melody.notes.map((_, idx) => {
@@ -697,11 +743,13 @@ export const Game = () => {
                 const pipClass =
                   res === 'hit'
                     ? 'bg-emerald-400'
-                    : res === 'miss'
-                      ? 'bg-red-500'
-                      : idx === playIdx
-                        ? 'bg-[#ffe875]'
-                        : 'bg-black/45';
+                    : res === 'grace'
+                      ? 'bg-sky-400'
+                      : res === 'miss'
+                        ? 'bg-red-500'
+                        : idx === playIdx
+                          ? 'bg-[#ffe875]'
+                          : 'bg-black/45';
                 return (
                   <div
                     key={idx}

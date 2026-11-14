@@ -184,7 +184,8 @@ export async function submitAttempt(
   username: string,
   isAnonymous: boolean,
   rawAccuracy: number,
-  snoovatarUrl?: string | null
+  snoovatarUrl?: string | null,
+  graceUsed = false
 ): Promise<SubmitAttemptResponse> {
   const accuracy = Math.max(0, Math.min(1, rawAccuracy));
   const utcDate = getUtcDateKey();
@@ -240,11 +241,16 @@ export async function submitAttempt(
     grant('first_tune');
     if (accuracy >= 1) grant('flawless');
     if (daily.finalRoll === 1) grant('nat1_clear');
+    if (graceUsed) grant('grace_note');
     if (newStreak >= 3) grant('streak3');
+    if (newStreak >= 7) grant('streak7');
     if (newStreak >= 30) grant('streak30');
   }
   if (newAttemptsCount >= 5) {
     grant('grinder5');
+  }
+  if (newLevel >= 25) {
+    grant('level25');
   }
 
   const resolvedAvatar = snoovatarUrl ?? profile.snoovatarUrl ?? null;
@@ -441,6 +447,22 @@ export async function openMysteryChest(
   const newTodayXp = daily.todayXp + bonusXp;
   const newChestsOpened = daily.chestsOpened + 1;
 
+  const nextFeats = [...profile.feats];
+  let unlockedFeat: RareFeat | null = null;
+  const grant = (feat: RareFeat) => {
+    if (!nextFeats.includes(feat)) {
+      nextFeats.push(feat);
+      if (!unlockedFeat) unlockedFeat = feat;
+    }
+  };
+
+  if (nextRelics.length >= 5) grant('relic5');
+  if (nextRelics.length >= 12) grant('voice6');
+  if (nextRelics.length >= 15) grant('relic15');
+  if (nextRelics.length >= 30) grant('relic30');
+  if (rarity === 'mythic') grant('mythic_relic');
+  if (newLevel >= 25) grant('level25');
+
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       chestsOpened: String(newChestsOpened),
@@ -448,6 +470,7 @@ export async function openMysteryChest(
     }),
     redis.hSet(pKey, {
       relics: JSON.stringify(nextRelics),
+      feats: JSON.stringify(nextFeats),
       xp: String(newTotalXp),
       level: String(newLevel),
       title: newTitle,
@@ -468,9 +491,11 @@ export async function openMysteryChest(
     relicId: picked.id,
     isDuplicate,
     bonusXp,
+    unlockedFeat,
     profile: {
       ...profile,
       relics: nextRelics,
+      feats: nextFeats,
       totalXp: newTotalXp,
       level: newLevel,
       title: newTitle,

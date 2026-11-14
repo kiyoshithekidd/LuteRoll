@@ -140,6 +140,17 @@ export function getTitleForLevel(level: number): string {
   return entry?.title ?? 'Busker';
 }
 
+/**
+ * Spell-themed forgiveness:
+ * - 3+ day streak: Ward of Grace (1 free missed note per run)
+ * - 7+ day streak: Greater Ward of Grace (2 free missed notes per run)
+ */
+export function getWardOfGraceCharges(streak: number): number {
+  if (streak >= 7) return 2;
+  if (streak >= 3) return 1;
+  return 0;
+}
+
 export type FeatMeta = {
   id:
     | 'first_tune'
@@ -147,8 +158,16 @@ export type FeatMeta = {
     | 'nat20'
     | 'nat1_clear'
     | 'streak3'
+    | 'streak7'
     | 'streak30'
-    | 'grinder5';
+    | 'grinder5'
+    | 'grace_note'
+    | 'relic5'
+    | 'relic15'
+    | 'relic30'
+    | 'mythic_relic'
+    | 'voice6'
+    | 'level25';
   title: string;
   description: string;
   icon: string;
@@ -182,8 +201,20 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
   {
     id: 'streak3',
     title: 'Regular Patron',
-    description: 'Build a 3-day tavern streak.',
+    description: 'Build a 3-day streak & unlock Ward of Grace (1 free miss).',
     icon: '🍺',
+  },
+  {
+    id: 'streak7',
+    title: 'Tavern Legend',
+    description: 'Build a 7-day streak & upgrade Ward of Grace (2 free misses).',
+    icon: '🛡️',
+  },
+  {
+    id: 'streak30',
+    title: 'Tavern Immortal',
+    description: 'Reach a legendary 30-day streak.',
+    icon: '👑',
   },
   {
     id: 'grinder5',
@@ -192,10 +223,46 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     icon: '🎻',
   },
   {
-    id: 'streak30',
-    title: 'Tavern Immortal',
-    description: 'Reach a legendary 30-day streak.',
-    icon: '👑',
+    id: 'grace_note',
+    title: 'Ward of Grace',
+    description: 'Clear a melody saved by the Ward of Grace spell.',
+    icon: '🪄',
+  },
+  {
+    id: 'relic5',
+    title: 'Pocket Collector',
+    description: 'Discover 5 unique Tavern Relics.',
+    icon: '🎒',
+  },
+  {
+    id: 'relic15',
+    title: 'Curator of Keys',
+    description: 'Discover 15 unique Tavern Relics.',
+    icon: '🗝️',
+  },
+  {
+    id: 'relic30',
+    title: 'Archivist of the Vault',
+    description: 'Discover 30 unique Tavern Relics.',
+    icon: '🏛️',
+  },
+  {
+    id: 'mythic_relic',
+    title: 'Mythic Resonance',
+    description: 'Unearth a Mythic-rarity Relic from a Mystery Chest.',
+    icon: '🌌',
+  },
+  {
+    id: 'voice6',
+    title: 'Multi-Instrumentalist',
+    description: 'Unlock 6 keyboard voices (12+ relics).',
+    icon: '🎹',
+  },
+  {
+    id: 'level25',
+    title: 'Grand Virtuoso',
+    description: 'Reach Bard Level 25.',
+    icon: '🌟',
   },
 ] as const;
 

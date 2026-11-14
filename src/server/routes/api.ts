@@ -160,7 +160,8 @@ api.post('/attempt', async (c) => {
       player.username,
       player.isAnonymous,
       body.accuracy,
-      player.snoovatarUrl
+      player.snoovatarUrl,
+      Boolean(body.graceUsed)
     );
 
     if (result.passed) {

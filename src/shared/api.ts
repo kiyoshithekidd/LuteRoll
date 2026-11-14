@@ -4,8 +4,16 @@ export type RareFeat =
   | 'nat20'
   | 'nat1_clear'
   | 'streak3'
+  | 'streak7'
   | 'streak30'
-  | 'grinder5';
+  | 'grinder5'
+  | 'grace_note'
+  | 'relic5'
+  | 'relic15'
+  | 'relic30'
+  | 'mythic_relic'
+  | 'voice6'
+  | 'level25';
 
 export type RelicRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
 
@@ -56,6 +64,7 @@ export type OpenChestResponse = {
   relicId: string;
   isDuplicate: boolean;
   bonusXp: number;
+  unlockedFeat?: RareFeat | null;
   profile: PlayerProfile;
   daily: DailyState;
 };
@@ -81,6 +90,7 @@ export type CommitRollResponse = {
 
 export type SubmitAttemptRequest = {
   accuracy: number; // 0..1
+  graceUsed?: boolean;
 };
 
 export type SubmitAttemptResponse = {
