@@ -43,10 +43,36 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
               </li>
               <li>
                 Score <strong>50%+ accuracy</strong> to earn XP (below 50% =
-                tomatoes &amp; 0 XP). Play as many times a day as you want to
-                grind XP!
+                tomatoes &amp; 0 XP). Replay as many times a day as you want!
               </li>
             </ol>
+          </div>
+
+          <div>
+            <h3 className="font-bold uppercase tracking-wider text-[#6e4726] mb-1">
+              Chests, Spells &amp; Streaks
+            </h3>
+            <ul className="space-y-1">
+              <li>
+                🎁 <strong>Mystery Chests:</strong> Earn 1 on your first clear +
+                1 bonus chest for 100% or Nat 20. Collect{' '}
+                <strong>48 Relics</strong> (3rd duplicate guarantees a new
+                relic) to unlock <strong>12 piano, organ &amp; synth voices</strong>.
+              </li>
+              <li>
+                🛡️ <strong>Ward of Grace:</strong> A 3-day streak grants{' '}
+                <strong>1 free missed note</strong> per run (7-day streak ={' '}
+                <strong>2 free misses</strong>).
+              </li>
+              <li>
+                🧊 <strong>Streak Freeze:</strong> Earned every 5-day streak;
+                auto-saves your streak if you miss 1 UTC day.
+              </li>
+              <li>
+                🎯 <strong>Daily Bounty:</strong> Complete today&apos;s rotating
+                objective for bonus XP.
+              </li>
+            </ul>
           </div>
 
           <div>
@@ -75,7 +101,7 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
 
           <div>
             <h3 className="font-bold uppercase tracking-wider text-[#6e4726] mb-1">
-              Bard Title Ladder
+              Bard Title Ladder (Lvl 1–100)
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {[...BARD_TITLE_LADDER].reverse().map((b) => (

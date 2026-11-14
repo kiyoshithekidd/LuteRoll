@@ -8,6 +8,7 @@ import { getTierForRoll } from '../shared/constants';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
+import { TavernGuideModal } from './components/TavernGuideModal';
 import { trackAppReady } from './telemetry';
 
 function getUtcResetCountdown(): string {
@@ -52,6 +53,7 @@ function formatShortUtcDate(utcDate: string): string {
 
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     trackAppReady();
@@ -143,14 +145,25 @@ export const Splash = () => {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-          className="gold-btn w-full py-3.5 px-5 rounded-xl font-bold text-base tracking-wide cursor-pointer transition-transform"
-        >
-          {finalRoll !== null ? 'Play Today’s Tune' : 'Enter the Tavern & Roll'}
-        </button>
+        <div className="w-full flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowGuide(true)}
+            className="px-3.5 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
+          >
+            📜 Guide
+          </button>
+          <button
+            type="button"
+            onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+            className="gold-btn flex-1 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base tracking-wide cursor-pointer transition-transform"
+          >
+            {finalRoll !== null ? 'Play Today’s Tune' : 'Enter & Roll d20'}
+          </button>
+        </div>
       </section>
+
+      {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
     </main>
   );
 };
