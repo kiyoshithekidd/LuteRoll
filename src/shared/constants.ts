@@ -132,3 +132,62 @@ export function getTitleForLevel(level: number): string {
   const entry = BARD_TITLE_LADDER.find((t) => level >= t.minLevel);
   return entry?.title ?? 'Busker';
 }
+
+export type FeatMeta = {
+  id:
+    | 'first_tune'
+    | 'flawless'
+    | 'nat20'
+    | 'nat1_clear'
+    | 'streak3'
+    | 'streak30'
+    | 'grinder5';
+  title: string;
+  description: string;
+  icon: string;
+};
+
+export const FEAT_CATALOG: readonly FeatMeta[] = [
+  {
+    id: 'first_tune',
+    title: 'Tavern Debut',
+    description: 'Clear your first daily melody.',
+    icon: '🎵',
+  },
+  {
+    id: 'flawless',
+    title: 'Golden Ear',
+    description: 'Clear a daily melody with 100% accuracy.',
+    icon: '✨',
+  },
+  {
+    id: 'nat20',
+    title: 'Blessed by Fate',
+    description: 'Roll a Natural 20 on the d20.',
+    icon: '🎲',
+  },
+  {
+    id: 'nat1_clear',
+    title: 'Underdog Encore',
+    description: 'Clear a Brutal (Nat 1) melody.',
+    icon: '🔥',
+  },
+  {
+    id: 'streak3',
+    title: 'Regular Patron',
+    description: 'Build a 3-day tavern streak.',
+    icon: '🍺',
+  },
+  {
+    id: 'grinder5',
+    title: 'Encore Virtuoso',
+    description: 'Play 5+ runs in a single day.',
+    icon: '🎻',
+  },
+  {
+    id: 'streak30',
+    title: 'Tavern Immortal',
+    description: 'Reach a legendary 30-day streak.',
+    icon: '👑',
+  },
+] as const;

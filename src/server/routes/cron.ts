@@ -22,6 +22,12 @@ cron.post('/daily-post', async (c) => {
       entry: 'default',
     });
 
+    try {
+      await post.sticky();
+    } catch {
+      // Non-fatal if sticky slot or permission is unavailable
+    }
+
     return c.json({
       status: 'success',
       postId: post.id,

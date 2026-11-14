@@ -1,4 +1,11 @@
-export type RareFeat = 'nat20' | 'nat1_clear' | 'streak30';
+export type RareFeat =
+  | 'first_tune'
+  | 'flawless'
+  | 'nat20'
+  | 'nat1_clear'
+  | 'streak3'
+  | 'streak30'
+  | 'grinder5';
 
 export type PlayerProfile = {
   username: string;

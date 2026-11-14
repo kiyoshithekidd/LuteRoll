@@ -203,12 +203,22 @@ export async function submitAttempt(
 
   const nextFeats = [...profile.feats];
   let unlockedFeat: RareFeat | null = null;
-  if (passed && daily.finalRoll === 1 && !nextFeats.includes('nat1_clear')) {
-    nextFeats.push('nat1_clear');
-    unlockedFeat = 'nat1_clear';
-  } else if (newStreak >= 30 && !nextFeats.includes('streak30')) {
-    nextFeats.push('streak30');
-    unlockedFeat = 'streak30';
+  const grant = (feat: RareFeat) => {
+    if (!nextFeats.includes(feat)) {
+      nextFeats.push(feat);
+      if (!unlockedFeat) unlockedFeat = feat;
+    }
+  };
+
+  if (passed) {
+    grant('first_tune');
+    if (accuracy >= 1) grant('flawless');
+    if (daily.finalRoll === 1) grant('nat1_clear');
+    if (newStreak >= 3) grant('streak3');
+    if (newStreak >= 30) grant('streak30');
+  }
+  if (newAttemptsCount >= 5) {
+    grant('grinder5');
   }
 
   const resolvedAvatar = snoovatarUrl ?? profile.snoovatarUrl ?? null;

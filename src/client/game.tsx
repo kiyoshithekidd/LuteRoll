@@ -18,6 +18,7 @@ import type {
 } from '../shared/api';
 import {
   FAIL_ACCURACY_THRESHOLD,
+  FEAT_CATALOG,
   getTierForRoll,
   xpRequiredForLevel,
 } from '../shared/constants';
@@ -27,6 +28,7 @@ import bountySealUrl from './assets/bounty-seal.webp';
 import tomatoSplatUrl from './assets/tomato-splat.webp';
 import nat20SealUrl from './assets/nat20-seal.webp';
 import { soundEngine } from './audio/soundEngine';
+import { FeatsModal } from './components/FeatsModal';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ResultCard } from './components/ResultCard';
@@ -57,6 +59,7 @@ export const Game = () => {
   const [muted, setMuted] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showFeats, setShowFeats] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 3D Dice Tray state
@@ -327,6 +330,9 @@ export const Game = () => {
       if (expected === undefined) return;
 
       const isCorrect = midi === expected;
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(isCorrect ? 10 : 28);
+      }
       if (isCorrect) {
         soundEngine.playNote(midi, 320);
       } else {
@@ -389,10 +395,18 @@ export const Game = () => {
             <button
               type="button"
               onClick={() => setShowLeaderboard(true)}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
+              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
               aria-label="Open leaderboards"
             >
               🏆 Ranks
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFeats(true)}
+              className="text-xs px-2 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
+              aria-label="Open trophy case"
+            >
+              🎖️ {state?.profile.feats.length ?? 0}/{FEAT_CATALOG.length}
             </button>
             <button
               type="button"
@@ -786,6 +800,12 @@ export const Game = () => {
 
       {showLeaderboard && (
         <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
+      )}
+      {showFeats && (
+        <FeatsModal
+          unlocked={state?.profile.feats ?? []}
+          onClose={() => setShowFeats(false)}
+        />
       )}
       {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
     </div>
