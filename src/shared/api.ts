@@ -26,6 +26,7 @@ export type DailyState = {
 export type StateResponse = {
   type: 'state';
   postId: string;
+  isDevSubreddit?: boolean;
   profile: PlayerProfile;
   daily: DailyState;
 };

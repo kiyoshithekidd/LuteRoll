@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { UiResponse } from '@devvit/web/shared';
-import { context } from '@devvit/web/server';
+import { context, reddit } from '@devvit/web/server';
 import { createPost } from '../core/post';
 import { resetDailyState } from '../redisStore';
 
@@ -37,8 +37,12 @@ menu.post('/reset-daily', async (c) => {
     );
   }
 
-  const playerKey = context.userId;
-  if (!playerKey) {
+  const username = await reddit.getCurrentUsername();
+  const keysToClear: string[] = [];
+  if (username) keysToClear.push(`u:${username}`);
+  if (context.userId) keysToClear.push(`anon:${context.userId}`);
+
+  if (keysToClear.length === 0) {
     return c.json<UiResponse>(
       {
         showToast: 'Sign in required to reset daily state.',
@@ -47,7 +51,7 @@ menu.post('/reset-daily', async (c) => {
     );
   }
 
-  await resetDailyState(playerKey);
+  await Promise.all(keysToClear.map((k) => resetDailyState(k)));
   return c.json<UiResponse>(
     {
       showToast: 'Daily roll reset! Reopen or refresh the post to roll again.',

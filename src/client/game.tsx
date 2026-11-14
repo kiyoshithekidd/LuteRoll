@@ -175,6 +175,28 @@ export const Game = () => {
     soundEngine.setMuted(next);
   };
 
+  const handleDevReset = async () => {
+    try {
+      clearDemoTimers();
+      const res = await fetch('/api/dev-reset', { method: 'POST' });
+      if (!res.ok) return;
+      const fresh = (await res.json()) as StateResponse;
+      setState(fresh);
+      setRollTrigger(0);
+      setIsRolling(false);
+      setIsRerollPending(false);
+      setSettledBannerValue(null);
+      setLastResult(null);
+      setNoteResults([]);
+      setPlayIdx(0);
+      setCorrectCount(0);
+      setError(null);
+      setPhase('ROLL');
+    } catch {
+      // ignore
+    }
+  };
+
   const handleTriggerRoll = (reroll: boolean) => {
     soundEngine.unlock();
     trackJourneyStart();
@@ -402,6 +424,16 @@ export const Game = () => {
             >
               {muted ? '🔇' : '🔊'}
             </button>
+            {state?.isDevSubreddit && (
+              <button
+                type="button"
+                onClick={() => void handleDevReset()}
+                className="text-[11px] px-2 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer"
+                title="Reset today's roll (dev subreddit only)"
+              >
+                ↻ Reset
+              </button>
+            )}
           </div>
         </div>
 

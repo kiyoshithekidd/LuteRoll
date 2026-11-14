@@ -12,6 +12,7 @@ import {
   getDailyState,
   getLeaderboards,
   getPlayerProfile,
+  resetDailyState,
   submitAttempt,
 } from '../redisStore';
 import { syncBardUserFlair } from '../flairService';
@@ -55,6 +56,7 @@ api.get('/state', async (c) => {
     return c.json<StateResponse>({
       type: 'state',
       postId,
+      isDevSubreddit: context.subredditName === 'lute_roll_dev',
       profile,
       daily,
     });
@@ -167,4 +169,36 @@ api.get('/leaderboard', async (c) => {
       error instanceof Error ? error.message : 'Failed to load leaderboards';
     return c.json<ErrorResponse>({ status: 'error', message }, 500);
   }
+});
+
+api.post('/dev-reset', async (c) => {
+  if (context.subredditName !== 'lute_roll_dev') {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'Dev reset is only allowed on r/lute_roll_dev' },
+      403
+    );
+  }
+
+  const { postId } = context;
+  if (!postId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'postId is required' },
+      400
+    );
+  }
+
+  const player = await resolvePlayer();
+  await resetDailyState(player.playerKey);
+  const [profile, daily] = await Promise.all([
+    getPlayerProfile(player.playerKey, player.username, player.isAnonymous),
+    getDailyState(player.playerKey),
+  ]);
+
+  return c.json<StateResponse>({
+    type: 'state',
+    postId,
+    isDevSubreddit: true,
+    profile,
+    daily,
+  });
 });
