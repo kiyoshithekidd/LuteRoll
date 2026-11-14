@@ -24,7 +24,10 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 
 ## Status
 
-Milestone 1 in progress: hello-world Devvit Web app deployed as an unpublished test post in r/luteroll. The full plan is in PRD.md. Do not publish the app, upload and playtest only.
+Milestone 2 in progress: core loop playable (3D d20 physics roll, deterministic melody generator, Web Audio synth, 2-octave touch keyboard, XP/streaks in Redis).
+
+> **HACKATHON DEPLOYMENT RULE — DO NOT PUBLISH:**
+> Never run `devvit publish` (or `npm run launch`). Per the Reddit Game of the Day Hackathon rules, apps must remain **private/unpublished** during the contest. Use `npm run dev` (`devvit playtest`) for live testing and `npm run deploy` (`devvit upload`) to upload private versions.
 
 ## Tech
 
