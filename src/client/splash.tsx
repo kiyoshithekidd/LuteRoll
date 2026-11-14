@@ -40,6 +40,16 @@ function D20Emblem({ value }: { value: number | null }) {
   );
 }
 
+function formatShortUtcDate(utcDate: string): string {
+  const dt = new Date(`${utcDate}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return utcDate;
+  return dt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
 
@@ -66,22 +76,24 @@ export const Splash = () => {
   const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
 
   return (
-    <main className="tavern-stage-bg min-h-screen w-full flex items-center justify-center p-3 sm:p-5">
-      <section className="tavern-wood-frame w-full max-w-md rounded-2xl p-5 flex flex-col items-center text-center gap-4">
-        <div className="w-full flex items-center justify-between text-xs uppercase tracking-wider text-[#ffe875]/90">
-          <span>Tavern Stage • {utcDate}</span>
-          <div className="flex items-center gap-2">
+    <main className="tavern-stage-bg min-h-screen w-full flex items-center justify-center p-2.5 sm:p-5">
+      <section className="tavern-wood-frame w-full max-w-md rounded-2xl p-4 sm:p-5 flex flex-col items-center text-center gap-3">
+        <div className="w-full flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-[#ffe875]/90">
+          <span className="whitespace-nowrap">
+            Tavern • {formatShortUtcDate(utcDate)}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
             {state && state.profile.streak > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/45 border border-amber-400/40 text-amber-200 font-bold">
                 <img
                   src={streakFlameUrl}
                   alt=""
-                  className="w-3.5 h-3.5 object-contain"
+                  className="w-3 h-3 object-contain"
                 />
                 {state.profile.streak}
               </span>
             )}
-            <span className="px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/40">
+            <span className="px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/40 whitespace-nowrap">
               r/luteroll
             </span>
           </div>
@@ -89,11 +101,11 @@ export const Splash = () => {
 
         <D20Emblem value={finalRoll} />
 
-        <div className="space-y-1">
-          <h1 className="font-serif text-3xl font-bold tracking-tight text-[#ffe875] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+        <div className="space-y-0.5">
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-[#ffe875] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
             Lute Roll
           </h1>
-          <p className="text-sm text-[#f5ead2]/90">
+          <p className="text-xs sm:text-sm text-[#f5ead2]/90">
             {state ? (
               <>
                 <span className="font-semibold text-white">{username}</span> •
@@ -106,15 +118,15 @@ export const Splash = () => {
         </div>
 
         {finalRoll !== null && tier ? (
-          <div className="parchment-card w-full rounded-xl px-3.5 py-2.5 text-sm flex items-center justify-between gap-2">
-            <div className="text-left">
-              <p className="font-bold text-[#26160a]">
-                Today&apos;s Roll: {finalRoll} ({tier.name})
+          <div className="parchment-card w-full rounded-xl px-3 py-2 text-sm flex items-center justify-between gap-2">
+            <div className="text-left min-w-0">
+              <p className="font-bold text-[#26160a] text-xs sm:text-sm">
+                Today&apos;s Roll: {finalRoll} ({tier.name}) •{' '}
+                {tier.xpMultiplier}x XP
               </p>
-              <p className="text-xs text-[#6e4726]">
-                {tier.xpMultiplier}x XP • {state?.daily.attemptsCount ?? 0} plays
-                • +{state?.daily.todayXp ?? 0} XP • Next roll{' '}
-                {getUtcResetCountdown()}
+              <p className="text-[11px] text-[#6e4726] whitespace-nowrap">
+                {state?.daily.attemptsCount ?? 0} plays • +
+                {state?.daily.todayXp ?? 0} XP • Next {getUtcResetCountdown()}
               </p>
             </div>
             {state && state.profile.feats.length > 0 && (

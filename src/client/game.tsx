@@ -380,41 +380,16 @@ export const Game = () => {
     <div className="tavern-stage-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-2.5">
       {/* Top Tavern HUD */}
       <header className="tavern-wood-frame rounded-xl px-3.5 py-2.5 flex flex-col gap-2">
+        {/* Row 1: Title + Action Buttons */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {state?.profile.snoovatarUrl && (
-              <img
-                src={state.profile.snoovatarUrl}
-                alt=""
-                className="w-9 h-9 rounded-full object-cover border border-[#d4af37]/70 bg-black/40 shrink-0"
-              />
-            )}
-            <div className="min-w-0">
-              <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
-                Lute Roll
-              </h1>
-              <p className="text-[11px] sm:text-xs text-[#f5ead2]/85 truncate">
-                {state
-                  ? `${state.profile.username} • Lvl ${level} ${state.profile.title}`
-                  : 'Entering the tavern...'}
-              </p>
-            </div>
-          </div>
+          <h1 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-none whitespace-nowrap">
+            Lute Roll
+          </h1>
           <div className="flex items-center gap-1.5 shrink-0">
-            {state && state.profile.streak > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-black/45 border border-amber-400/40 text-amber-200">
-                <img
-                  src={streakFlameUrl}
-                  alt="Streak"
-                  className="w-3.5 h-3.5 object-contain"
-                />
-                {state.profile.streak}
-              </span>
-            )}
             <button
               type="button"
               onClick={() => setShowLeaderboard(true)}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer"
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
               aria-label="Open leaderboards"
             >
               🏆 Ranks
@@ -439,7 +414,7 @@ export const Game = () => {
               <button
                 type="button"
                 onClick={() => void handleDevReset()}
-                className="text-[11px] px-2 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer"
+                className="text-[11px] px-2 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer whitespace-nowrap"
                 title="Reset today's roll (dev subreddit only)"
               >
                 ↻ Reset
@@ -448,7 +423,35 @@ export const Game = () => {
           </div>
         </div>
 
-        {/* XP Bar */}
+        {/* Row 2: Player Identity + Streak */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {state?.profile.snoovatarUrl && (
+              <img
+                src={state.profile.snoovatarUrl}
+                alt=""
+                className="w-6 h-6 rounded-full object-cover border border-[#d4af37]/70 bg-black/40 shrink-0"
+              />
+            )}
+            <p className="text-xs text-[#f5ead2]/90 truncate">
+              {state
+                ? `${state.profile.username} • Lvl ${level} ${state.profile.title}`
+                : 'Entering the tavern...'}
+            </p>
+          </div>
+          {state && state.profile.streak > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/45 border border-amber-400/40 text-amber-200 shrink-0">
+              <img
+                src={streakFlameUrl}
+                alt="Streak"
+                className="w-3.5 h-3.5 object-contain"
+              />
+              {state.profile.streak}
+            </span>
+          )}
+        </div>
+
+        {/* Row 3: XP Bar */}
         {state && (
           <div className="flex items-center gap-2 text-[10px] text-[#ffe875]/80">
             <div className="flex-1 h-1.5 rounded-full bg-black/50 overflow-hidden border border-[#d4af37]/25">
