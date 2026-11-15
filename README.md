@@ -25,6 +25,7 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 ## Status
 
 Playable & verified on Devvit Web (`r/lute_roll_dev`), featuring:
+
 - **3D d20 Tavern Tray:** Three.js + physics-driven d20 roll with 1 daily reroll and 950ms reveal banner.
 - **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio with lit key guides.
 - **12 Unlockable Keyboard Voices:** *Tavern Upright*, *Saloon Honky-Tonk*, *Baroque Harpsichord*, *Clockwork Music Box*, *Velvet Electric Keys*, *Funky Clavinet*, *Cathedral Pipe Organ*, *Tavern Concertina*, *Arcane Lead Synth*, *Gilded Carillon*, *Starlight Celesta*, and *Astral Concert Grand* — all synthesized with zero external audio samples.
