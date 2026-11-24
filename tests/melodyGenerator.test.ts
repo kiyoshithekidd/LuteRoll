@@ -2,15 +2,31 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMelody } from '../src/shared/melodyGenerator';
 import {
+  getIsoWeekKey,
   getLevelFromXp,
   getTierForRoll,
   getTitleForLevel,
+  KEYBOARD_VOICES,
   xpRequiredForLevel,
 } from '../src/shared/constants';
+import {
+  formatNoteResultsGrid,
+  formatResultCardText,
+} from '../src/shared/resultCard';
+import { formatBardFlairText } from '../src/server/flairService';
+import type { PlayerProfile } from '../src/shared/api';
 
 function isWhiteKey(midi: number): boolean {
   const pc = midi % 12;
-  return pc === 0 || pc === 2 || pc === 4 || pc === 5 || pc === 7 || pc === 9 || pc === 11;
+  return (
+    pc === 0 ||
+    pc === 2 ||
+    pc === 4 ||
+    pc === 5 ||
+    pc === 7 ||
+    pc === 9 ||
+    pc === 11
+  );
 }
 
 describe('generateMelody', () => {
@@ -37,7 +53,8 @@ describe('generateMelody', () => {
       const melody = generateMelody('2026-11-14', 'TestBard', roll);
 
       assert.ok(
-        melody.notes.length >= tier.minNotes && melody.notes.length <= tier.maxNotes,
+        melody.notes.length >= tier.minNotes &&
+          melody.notes.length <= tier.maxNotes,
         `Roll ${roll} note count ${melody.notes.length} outside [${tier.minNotes}, ${tier.maxNotes}]`
       );
 
@@ -48,20 +65,39 @@ describe('generateMelody', () => {
           `Roll ${roll} note ${note} outside [${tier.minMidi}, ${tier.maxMidi}]`
         );
         if (tier.keyMode === 'white') {
-          assert.ok(isWhiteKey(note), `Roll ${roll} expected white key, got ${note}`);
+          assert.ok(
+            isWhiteKey(note),
+            `Roll ${roll} expected white key, got ${note}`
+          );
         }
         if (i >= 2) {
           assert.ok(
-            !(melody.notes[i] === melody.notes[i - 1] && melody.notes[i - 1] === melody.notes[i - 2]),
+            !(
+              melody.notes[i] === melody.notes[i - 1] &&
+              melody.notes[i - 1] === melody.notes[i - 2]
+            ),
             `Roll ${roll} had >2 identical notes in a row at index ${i}`
           );
         }
       }
     }
   });
+
+  it('generates musical Brutal (Nat 1) melodies starting on A4 or E5 and resolving to A', () => {
+    for (let s = 0; s < 10; s++) {
+      const m = generateMelody('2026-11-24', `BrutalBard${s}`, 1);
+      const first = m.notes[0]!;
+      const last = m.notes[m.notes.length - 1]!;
+      assert.ok(
+        first === 69 || first === 76,
+        `Expected Brutal opening on A4 (69) or E5 (76), got ${first}`
+      );
+      assert.equal(last % 12, 9, `Expected Brutal cadence on A, got ${last}`);
+    }
+  });
 });
 
-describe('XP curve and Bard Title ladder', () => {
+describe('XP curve, Bard Title ladder & Voices', () => {
   it('starts at Level 1 Busker with 0 XP', () => {
     assert.equal(getLevelFromXp(0), 1);
     assert.equal(getTitleForLevel(1), 'Busker');
@@ -73,5 +109,86 @@ describe('XP curve and Bard Title ladder', () => {
     }
     assert.equal(getTitleForLevel(5), 'Tavern Singer');
     assert.equal(getTitleForLevel(50), 'Voice of the Realm');
+  });
+
+  it('includes both Tavern Upright and Tavern Lute unlocked at 0 relics', () => {
+    const starterVoices = KEYBOARD_VOICES.filter((v) => v.unlockRelics === 0).map(
+      (v) => v.id
+    );
+    assert.ok(starterVoices.includes('grand_piano'));
+    assert.ok(starterVoices.includes('tavern_lute'));
+  });
+});
+
+describe('getIsoWeekKey (Weekly Leaderboard Monday 00:00 UTC)', () => {
+  it('rolls over cleanly between Sunday 23:59 UTC and Monday 00:00 UTC', () => {
+    const sunday = new Date('2026-11-22T23:59:59Z');
+    const monday = new Date('2026-11-23T00:00:00Z');
+    assert.equal(getIsoWeekKey(sunday), '2026-W47');
+    assert.equal(getIsoWeekKey(monday), '2026-W48');
+  });
+
+  it('handles ISO year boundaries accurately', () => {
+    assert.equal(getIsoWeekKey(new Date('2025-12-29T00:00:00Z')), '2026-W01');
+    assert.equal(getIsoWeekKey(new Date('2026-01-01T12:00:00Z')), '2026-W01');
+  });
+});
+
+describe('formatResultCardText (B2 & Wordle-style grid)', () => {
+  it('renders emoji note grid and Reddit Markdown two-space line breaks', () => {
+    assert.equal(
+      formatNoteResultsGrid(['hit', 'grace', 'miss', 'hit']),
+      '🟩🟦🟥🟩'
+    );
+    const md = formatResultCardText({
+      utcDate: '2026-11-24',
+      roll: 14,
+      accuracy: 0.75,
+      xpEarned: 113,
+      passed: true,
+      noteResults: ['hit', 'grace', 'miss', 'hit'],
+      profile: { streak: 4, level: 5, title: 'Tavern Singer' },
+      forRedditMarkdown: true,
+    });
+    assert.ok(md.includes('  \n'), 'Expected Reddit Markdown line breaks');
+    assert.ok(md.includes('🟩🟦🟥🟩'));
+    assert.ok(md.includes('+113 XP'));
+  });
+
+  it('displays actual bounty XP earned on failed runs instead of hardcoded +0 XP', () => {
+    const text = formatResultCardText({
+      utcDate: '2026-11-24',
+      roll: 4,
+      accuracy: 0.25,
+      xpEarned: 50,
+      passed: false,
+      noteResults: ['hit', 'miss', 'miss', 'miss'],
+      profile: { streak: 2, level: 3, title: 'Apprentice Bard' },
+    });
+    assert.ok(text.includes('+50 XP'));
+    assert.ok(!text.includes('+0 XP'));
+  });
+});
+
+describe('formatBardFlairText (B8 badge priority)', () => {
+  const baseProfile: PlayerProfile = {
+    username: 'TestBard',
+    isAnonymous: false,
+    totalXp: 5000,
+    level: 10,
+    title: 'Wandering Minstrel',
+    streak: 30,
+    streakFreezes: 1,
+    dupePity: 0,
+    lastPlayedDate: '2026-11-24',
+    feats: ['nat20', 'streak30'],
+    relics: [],
+    selectedVoice: 'grand_piano',
+  };
+
+  it('prioritizes 30-day streak trophy over Nat 20 dice badge', () => {
+    const flair = formatBardFlairText(baseProfile);
+    assert.ok(flair.endsWith('🏆'), `Expected 🏆 badge, got "${flair}"`);
+    assert.ok(flair.length <= 64);
   });
 });

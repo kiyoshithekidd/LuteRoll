@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { soundEngine } from '../audio/soundEngine';
 
 type DiceTray3DProps = {
   rollTrigger: number;
+  targetRoll: number | null;
   onSettled: (value: number) => void;
+  onTrayTap?: () => void;
 };
 
 function createD20AtlasTexture(): THREE.CanvasTexture {
@@ -63,50 +66,15 @@ function createD20AtlasTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-function buildD20GeometryAndPhysics(radius = 0.85) {
-  const geom = new THREE.IcosahedronGeometry(radius, 0);
+function applyFaceValuesToGeometry(
+  geom: THREE.BufferGeometry,
+  faceValues: number[]
+): void {
   const posAttr = geom.getAttribute('position');
   const uvArray = new Float32Array(posAttr.count * 2);
-
-  const faceNormals: THREE.Vector3[] = [];
-  for (let f = 0; f < 20; f++) {
-    const i0 = f * 3;
-    const v0 = new THREE.Vector3().fromBufferAttribute(posAttr, i0);
-    const v1 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 1);
-    const v2 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 2);
-    const n = new THREE.Vector3()
-      .subVectors(v1, v0)
-      .cross(new THREE.Vector3().subVectors(v2, v0))
-      .normalize();
-    const c = new THREE.Vector3().add(v0).add(v1).add(v2).divideScalar(3);
-    if (n.dot(c) < 0) n.negate();
-    faceNormals.push(n);
-  }
-
-  // Pair opposite faces so opposite numbers sum to 21
-  const faceValues = new Array<number>(20).fill(0);
-  let lowVal = 1;
-  for (let f = 0; f < 20; f++) {
-    if (faceValues[f] !== 0) continue;
-    let opp = -1;
-    let minDot = 1;
-    for (let j = 0; j < 20; j++) {
-      if (j === f || faceValues[j] !== 0) continue;
-      const d = faceNormals[f]!.dot(faceNormals[j]!);
-      if (d < minDot) {
-        minDot = d;
-        opp = j;
-      }
-    }
-    faceValues[f] = lowVal;
-    if (opp !== -1) {
-      faceValues[opp] = 21 - lowVal;
-    }
-    lowVal++;
-  }
-
   const cols = 5;
   const rows = 4;
+
   for (let f = 0; f < 20; f++) {
     const valIdx = (faceValues[f] ?? 1) - 1;
     const col = valIdx % cols;
@@ -125,6 +93,53 @@ function buildD20GeometryAndPhysics(radius = 0.85) {
     uvArray[(i0 + 2) * 2 + 1] = vTop - cellV * 0.82;
   }
   geom.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+}
+
+function buildD20GeometryAndPhysics(radius = 0.85) {
+  const geom = new THREE.IcosahedronGeometry(radius, 0);
+  const posAttr = geom.getAttribute('position');
+
+  const faceNormals: THREE.Vector3[] = [];
+  for (let f = 0; f < 20; f++) {
+    const i0 = f * 3;
+    const v0 = new THREE.Vector3().fromBufferAttribute(posAttr, i0);
+    const v1 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 1);
+    const v2 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 2);
+    const n = new THREE.Vector3()
+      .subVectors(v1, v0)
+      .cross(new THREE.Vector3().subVectors(v2, v0))
+      .normalize();
+    const c = new THREE.Vector3().add(v0).add(v1).add(v2).divideScalar(3);
+    if (n.dot(c) < 0) n.negate();
+    faceNormals.push(n);
+  }
+
+  // Pair opposite faces so opposite numbers always sum to 21
+  const faceValues = new Array<number>(20).fill(0);
+  const oppositeFace = new Array<number>(20).fill(0);
+  let lowVal = 1;
+  for (let f = 0; f < 20; f++) {
+    if (faceValues[f] !== 0) continue;
+    let opp = -1;
+    let minDot = 1;
+    for (let j = 0; j < 20; j++) {
+      if (j === f || faceValues[j] !== 0) continue;
+      const d = faceNormals[f]!.dot(faceNormals[j]!);
+      if (d < minDot) {
+        minDot = d;
+        opp = j;
+      }
+    }
+    faceValues[f] = lowVal;
+    if (opp !== -1) {
+      faceValues[opp] = 21 - lowVal;
+      oppositeFace[f] = opp;
+      oppositeFace[opp] = f;
+    }
+    lowVal++;
+  }
+
+  applyFaceValuesToGeometry(geom, faceValues);
 
   // Build Cannon-es ConvexPolyhedron with deduplicated vertices
   const uniqueVerts: CANNON.Vec3[] = [];
@@ -144,7 +159,11 @@ function buildD20GeometryAndPhysics(radius = 0.85) {
 
   for (let f = 0; f < 20; f++) {
     const i0 = f * 3;
-    const idx0 = getVertIndex(posAttr.getX(i0), posAttr.getY(i0), posAttr.getZ(i0));
+    const idx0 = getVertIndex(
+      posAttr.getX(i0),
+      posAttr.getY(i0),
+      posAttr.getZ(i0)
+    );
     const idx1 = getVertIndex(
       posAttr.getX(i0 + 1),
       posAttr.getY(i0 + 1),
@@ -163,10 +182,109 @@ function buildD20GeometryAndPhysics(radius = 0.85) {
     faces,
   });
 
-  return { geom, shape, faceNormals, faceValues };
+  return { geom, shape, faceNormals, faceValues, oppositeFace };
 }
 
-export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
+function findTopFaceIndex(
+  quaternion: THREE.Quaternion,
+  faceNormals: THREE.Vector3[]
+): number {
+  const up = new THREE.Vector3(0, 1, 0);
+  let bestDot = -Infinity;
+  let bestFace = 0;
+  for (let f = 0; f < 20; f++) {
+    const worldNormal = faceNormals[f]!.clone().applyQuaternion(quaternion);
+    const dot = worldNormal.dot(up);
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestFace = f;
+    }
+  }
+  return bestFace;
+}
+
+const WALL_CONFIGS = [
+  { pos: [0, 0.45, -2.5], size: [7.2, 0.9, 0.35] },
+  { pos: [0, 0.45, 2.5], size: [7.2, 0.9, 0.35] },
+  { pos: [-3.4, 0.45, 0], size: [0.35, 0.9, 5.4] },
+  { pos: [3.4, 0.45, 0], size: [0.35, 0.9, 5.4] },
+] as const;
+
+type ThrowInit = {
+  pos: [number, number, number];
+  euler: [number, number, number];
+  vel: [number, number, number];
+  angVel: [number, number, number];
+};
+
+function createPhysicsWorld(
+  dieShape: CANNON.ConvexPolyhedron,
+  init: ThrowInit
+) {
+  const world = new CANNON.World({
+    gravity: new CANNON.Vec3(0, -24, 0),
+  });
+  world.allowSleep = true;
+
+  const dieMat = new CANNON.Material('die');
+  const feltMat = new CANNON.Material('felt');
+  const wallMat = new CANNON.Material('wall');
+
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(dieMat, feltMat, {
+      restitution: 0.32,
+      friction: 0.48,
+    })
+  );
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(dieMat, wallMat, {
+      restitution: 0.56,
+      friction: 0.22,
+    })
+  );
+
+  const feltBody = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Plane(),
+    material: feltMat,
+  });
+  feltBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(feltBody);
+
+  for (const wc of WALL_CONFIGS) {
+    const wb = new CANNON.Body({
+      mass: 0,
+      shape: new CANNON.Box(
+        new CANNON.Vec3(wc.size[0] / 2, wc.size[1] / 2, wc.size[2] / 2)
+      ),
+      position: new CANNON.Vec3(wc.pos[0], wc.pos[1], wc.pos[2]),
+      material: wallMat,
+    });
+    world.addBody(wb);
+  }
+
+  const dieBody = new CANNON.Body({
+    mass: 1.4,
+    shape: dieShape,
+    material: dieMat,
+    linearDamping: 0.28,
+    angularDamping: 0.25,
+  });
+  dieBody.position.set(init.pos[0], init.pos[1], init.pos[2]);
+  dieBody.quaternion.setFromEuler(init.euler[0], init.euler[1], init.euler[2]);
+  dieBody.velocity.set(init.vel[0], init.vel[1], init.vel[2]);
+  dieBody.angularVelocity.set(init.angVel[0], init.angVel[1], init.angVel[2]);
+  world.addBody(dieBody);
+
+  return { world, dieBody, feltBody };
+}
+
+export function DiceTray3D({
+  rollTrigger,
+  targetRoll,
+  onSettled,
+  onTrayTap,
+}: DiceTray3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSettledRef = useRef(onSettled);
   useEffect(() => {
@@ -187,7 +305,10 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
     camera.position.set(0, 7.2, 4.4);
     camera.lookAt(0, 0.2, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
@@ -195,16 +316,16 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    const ambient = new THREE.AmbientLight(0xffe8c2, 0.75);
+    const ambient = new THREE.AmbientLight(0xffe8c2, 0.78);
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xfff1cc, 1.55);
+    const keyLight = new THREE.DirectionalLight(0xfff1cc, 1.6);
     keyLight.position.set(3.5, 8.5, 4.0);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(512, 512);
     scene.add(keyLight);
 
-    const rimLight = new THREE.PointLight(0xd4af37, 0.9, 18);
+    const rimLight = new THREE.PointLight(0xd4af37, 1.05, 18);
     rimLight.position.set(-3.5, 4.5, -3.5);
     scene.add(rimLight);
 
@@ -226,14 +347,8 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
       roughness: 0.72,
       metalness: 0.1,
     });
-    const wallConfigs = [
-      { pos: [0, 0.45, -2.5], size: [7.2, 0.9, 0.35] },
-      { pos: [0, 0.45, 2.5], size: [7.2, 0.9, 0.35] },
-      { pos: [-3.4, 0.45, 0], size: [0.35, 0.9, 5.4] },
-      { pos: [3.4, 0.45, 0], size: [0.35, 0.9, 5.4] },
-    ] as const;
     const wallMeshes: THREE.Mesh[] = [];
-    for (const wc of wallConfigs) {
+    for (const wc of WALL_CONFIGS) {
       const m = new THREE.Mesh(
         new THREE.BoxGeometry(wc.size[0], wc.size[1], wc.size[2]),
         wallMat
@@ -244,77 +359,142 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
       wallMeshes.push(m);
     }
 
-    // Physics world
-    const world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -24, 0),
-    });
-    world.allowSleep = true;
-
-    const feltBody = new CANNON.Body({
-      mass: 0,
-      shape: new CANNON.Plane(),
-    });
-    feltBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    world.addBody(feltBody);
-
-    for (const wc of wallConfigs) {
-      const wb = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Box(
-          new CANNON.Vec3(wc.size[0] / 2, wc.size[1] / 2, wc.size[2] / 2)
-        ),
-        position: new CANNON.Vec3(wc.pos[0], wc.pos[1], wc.pos[2]),
-      });
-      world.addBody(wb);
-    }
-
     // Gold d20 die
     const atlasTex = createD20AtlasTexture();
-    const { geom: dieGeo, shape: dieShape, faceNormals, faceValues } =
-      buildD20GeometryAndPhysics(0.85);
+    const {
+      geom: dieGeo,
+      shape: dieShape,
+      faceNormals,
+      faceValues,
+      oppositeFace,
+    } = buildD20GeometryAndPhysics(0.85);
     const dieMat = new THREE.MeshStandardMaterial({
       map: atlasTex,
-      roughness: 0.32,
-      metalness: 0.45,
+      roughness: 0.3,
+      metalness: 0.48,
     });
     const dieMesh = new THREE.Mesh(dieGeo, dieMat);
     dieMesh.castShadow = true;
     scene.add(dieMesh);
 
-    const dieBody = new CANNON.Body({
-      mass: 1.4,
-      shape: dieShape,
-      linearDamping: 0.28,
-      angularDamping: 0.25,
-    });
-    dieBody.position.set(
-      (Math.random() - 0.5) * 1.4,
-      3.4,
-      (Math.random() - 0.5) * 0.8
-    );
-    dieBody.quaternion.setFromEuler(
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 2
-    );
-    dieBody.velocity.set(
-      (Math.random() - 0.5) * 5.5,
-      -2.0,
-      (Math.random() - 0.5) * 4.0
-    );
-    dieBody.angularVelocity.set(
-      (Math.random() - 0.5) * 16,
-      (Math.random() - 0.5) * 16,
-      (Math.random() - 0.5) * 16
-    );
-    world.addBody(dieBody);
-
-    let settled = false;
     let disposed = false;
     let rafId: number | null = null;
+
+    // Idle mode before first roll: floating, slowly gleaming gold d20 ready to tap
+    if (rollTrigger === 0) {
+      const reducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      const startMs = performance.now();
+
+      const renderIdle = (nowMs: number) => {
+        if (disposed) return;
+        const t = (nowMs - startMs) / 1000;
+        dieMesh.position.set(0, 1.35 + Math.sin(t * 2.1) * 0.12, 0);
+        dieMesh.rotation.set(t * 0.45, t * 0.75, Math.sin(t * 0.6) * 0.2);
+        renderer.render(scene, camera);
+        if (!reducedMotion) {
+          rafId = requestAnimationFrame(renderIdle);
+        }
+      };
+      renderIdle(startMs);
+
+      return () => {
+        disposed = true;
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        dieGeo.dispose();
+        dieMat.dispose();
+        atlasTex.dispose();
+        feltGeo.dispose();
+        feltMat.dispose();
+        wallMat.dispose();
+        for (const wm of wallMeshes) wm.geometry.dispose();
+        renderer.dispose();
+        if (renderer.domElement.parentNode === container) {
+          container.removeChild(renderer.domElement);
+        }
+      };
+    }
+
+    // Active roll: generate throw impulse
+    const throwInit: ThrowInit = {
+      pos: [(Math.random() - 0.5) * 1.4, 3.4, (Math.random() - 0.5) * 0.8],
+      euler: [
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+      ],
+      vel: [
+        (Math.random() - 0.5) * 6.0,
+        -2.2,
+        (Math.random() - 0.5) * 4.5,
+      ],
+      angVel: [
+        (Math.random() - 0.5) * 16,
+        (Math.random() - 0.5) * 16,
+        (Math.random() - 0.5) * 16,
+      ],
+    };
+
+    // B3 server-authoritative face alignment:
+    // Pre-simulate the exact deterministic 1/60s steps to find which face lands on top,
+    // then swap faceValues so the landed face displays targetRoll (preserving opposite-sum=21).
+    if (targetRoll !== null) {
+      const sim = createPhysicsWorld(dieShape, throwInit);
+      let still = 0;
+      for (let step = 0; step < 220; step++) {
+        sim.world.step(1 / 60);
+        if (
+          sim.dieBody.sleepState === CANNON.Body.SLEEPING ||
+          (sim.dieBody.velocity.length() < 0.08 &&
+            sim.dieBody.angularVelocity.length() < 0.12)
+        ) {
+          still++;
+          if (still >= 12) break;
+        } else {
+          still = 0;
+        }
+      }
+      const simQuat = new THREE.Quaternion(
+        sim.dieBody.quaternion.x,
+        sim.dieBody.quaternion.y,
+        sim.dieBody.quaternion.z,
+        sim.dieBody.quaternion.w
+      );
+      const landedFace = findTopFaceIndex(simQuat, faceNormals);
+      const currentTargetFace = faceValues.indexOf(targetRoll);
+      if (currentTargetFace !== -1 && currentTargetFace !== landedFace) {
+        const oppLanded = oppositeFace[landedFace]!;
+        const oppTarget = oppositeFace[currentTargetFace]!;
+        const prevLandedVal = faceValues[landedFace]!;
+        const prevOppLandedVal = faceValues[oppLanded]!;
+        faceValues[landedFace] = targetRoll;
+        faceValues[oppLanded] = 21 - targetRoll;
+        if (oppTarget !== landedFace) {
+          faceValues[currentTargetFace] = prevLandedVal;
+          faceValues[oppTarget] = prevOppLandedVal;
+        }
+        applyFaceValuesToGeometry(dieGeo, faceValues);
+      }
+    }
+
+    const { world, dieBody, feltBody } = createPhysicsWorld(dieShape, throwInit);
+
+    // Realistic wood clack & felt thud audio on physics collisions
+    dieBody.addEventListener(
+      'collide',
+      (event: { body: CANNON.Body; contact: CANNON.ContactEquation }) => {
+        const impact = Math.abs(event.contact.getImpactVelocityAlongNormal());
+        if (impact < 0.65) return;
+        const intensity = Math.min(1, impact / 10);
+        const surface = event.body === feltBody ? 'felt' : 'wood';
+        soundEngine.playDiceHit(intensity, surface);
+      }
+    );
+
+    let settled = false;
     let quietFrames = 0;
-    let elapsedSec = 0;
-    let lastFrameMs = performance.now();
+    let stepsRun = 0;
 
     const syncMeshToBody = () => {
       dieMesh.position.set(
@@ -330,23 +510,6 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
       );
     };
 
-    const readTopFaceValue = (): number => {
-      const up = new THREE.Vector3(0, 1, 0);
-      let bestDot = -Infinity;
-      let bestFace = 0;
-      for (let f = 0; f < 20; f++) {
-        const worldNormal = faceNormals[f]!
-          .clone()
-          .applyQuaternion(dieMesh.quaternion);
-        const dot = worldNormal.dot(up);
-        if (dot > bestDot) {
-          bestDot = dot;
-          bestFace = f;
-        }
-      }
-      return faceValues[bestFace] ?? 10;
-    };
-
     const finishSettle = () => {
       if (settled || disposed) return;
       settled = true;
@@ -356,7 +519,8 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
       }
       syncMeshToBody();
       renderer.render(scene, camera);
-      const val = readTopFaceValue();
+      const topIdx = findTopFaceIndex(dieMesh.quaternion, faceNormals);
+      const val = targetRoll ?? faceValues[topIdx] ?? 10;
       onSettledRef.current(val);
     };
 
@@ -365,30 +529,28 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     if (reducedMotion) {
-      let steps = 0;
       let stillCount = 0;
-      while (steps < 360) {
+      while (stepsRun < 220) {
         world.step(1 / 60);
-        steps++;
+        stepsRun++;
         if (
-          dieBody.velocity.length() < 0.08 &&
-          dieBody.angularVelocity.length() < 0.12
+          dieBody.sleepState === CANNON.Body.SLEEPING ||
+          (dieBody.velocity.length() < 0.08 &&
+            dieBody.angularVelocity.length() < 0.12)
         ) {
           stillCount++;
-          if (stillCount >= 10) break;
+          if (stillCount >= 12) break;
         } else {
           stillCount = 0;
         }
       }
       finishSettle();
     } else {
-      const tick = (nowMs: number) => {
+      const tick = () => {
         if (disposed || settled) return;
-        const dt = Math.min(0.05, Math.max(0.001, (nowMs - lastFrameMs) / 1000));
-        lastFrameMs = nowMs;
-        elapsedSec += dt;
-
-        world.step(1 / 60, dt, 3);
+        // Fixed 1/60 step matches pre-simulation deterministically
+        world.step(1 / 60);
+        stepsRun++;
         syncMeshToBody();
         renderer.render(scene, camera);
 
@@ -403,7 +565,7 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
           quietFrames = 0;
         }
 
-        if (quietFrames >= 12 || elapsedSec >= 3.6) {
+        if (quietFrames >= 12 || stepsRun >= 220) {
           finishSettle();
           return;
         }
@@ -430,12 +592,28 @@ export function DiceTray3D({ rollTrigger, onSettled }: DiceTray3DProps) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [rollTrigger]);
+  }, [rollTrigger, targetRoll]);
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-52 sm:h-60 rounded-xl overflow-hidden border-2 border-[#5a3a1e] shadow-inner bg-[#0a2317]"
+      onClick={rollTrigger === 0 ? onTrayTap : undefined}
+      role={rollTrigger === 0 && onTrayTap ? 'button' : undefined}
+      tabIndex={rollTrigger === 0 && onTrayTap ? 0 : undefined}
+      onKeyDown={
+        rollTrigger === 0 && onTrayTap
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onTrayTap();
+              }
+            }
+          : undefined
+      }
+      aria-label={rollTrigger === 0 ? 'Tap tray to toss the d20' : '3D d20 dice tray'}
+      className={`w-full h-48 sm:h-56 rounded-xl overflow-hidden border-2 border-[#5a3a1e] shadow-inner bg-[#0a2317] ${
+        rollTrigger === 0 && onTrayTap ? 'cursor-pointer' : ''
+      }`}
     />
   );
 }

@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import type { LeaderboardResponse } from '../../shared/api';
+import { apiFetch } from '../apiClient';
 
 type LeaderboardModalProps = {
   onClose: () => void;
 };
 
+type LeaderboardTab = 'daily' | 'weekly' | 'allTime';
+
 export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
-  const [tab, setTab] = useState<'daily' | 'allTime'>('daily');
+  const [tab, setTab] = useState<LeaderboardTab>('daily');
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    void fetch('/api/leaderboard')
+    void apiFetch('/api/leaderboard')
       .then((res) => (res.ok ? res.json() : null))
       .then((board: LeaderboardResponse | null) => {
         if (active && board?.type === 'leaderboard') {
@@ -28,7 +31,12 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
     };
   }, []);
 
-  const board = tab === 'daily' ? data?.daily : data?.allTime;
+  const board =
+    tab === 'daily'
+      ? data?.daily
+      : tab === 'weekly'
+        ? data?.weekly
+        : data?.allTime;
 
   return (
     <div
@@ -51,30 +59,51 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
           </button>
         </div>
 
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
             onClick={() => setTab('daily')}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
               tab === 'daily'
                 ? 'gold-btn'
                 : 'bg-black/35 text-[#f5ead2]/80 border border-[#d4af37]/30'
             }`}
           >
-            Today ({data?.utcDate ?? 'UTC'})
+            Daily
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('weekly')}
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+              tab === 'weekly'
+                ? 'gold-btn'
+                : 'bg-black/35 text-[#f5ead2]/80 border border-[#d4af37]/30'
+            }`}
+          >
+            Weekly
           </button>
           <button
             type="button"
             onClick={() => setTab('allTime')}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
               tab === 'allTime'
                 ? 'gold-btn'
                 : 'bg-black/35 text-[#f5ead2]/80 border border-[#d4af37]/30'
             }`}
           >
-            All-Time Bards
+            All-Time
           </button>
         </div>
+
+        {data && (
+          <p className="text-[10px] text-center text-[#ffe875]/75 -mt-1">
+            {tab === 'daily'
+              ? `Today • ${data.utcDate} UTC`
+              : tab === 'weekly'
+                ? `This Week • ${data.weekKey} (Mon 00:00 UTC reset)`
+                : 'All-Time Tavern Legends'}
+          </p>
+        )}
 
         <div className="parchment-card rounded-xl p-3 overflow-y-auto flex-1 min-h-[200px]">
           {loading ? (

@@ -1,10 +1,12 @@
-import type { KeyboardVoiceId } from '../../shared/api';
+import type { KeyboardVoiceId, RelicRarity } from '../../shared/api';
 import { midiToFrequency } from '../../shared/melodyGenerator';
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
+  private busInput: GainNode | null = null;
   private muted = false;
   private voice: KeyboardVoiceId = 'grand_piano';
+  private lastDiceHitMs = 0;
 
   constructor() {
     if (typeof document !== 'undefined') {
@@ -25,11 +27,54 @@ class SoundEngine {
           .webkitAudioContext;
       if (!AudioCtx) return null;
       this.ctx = new AudioCtx();
+      this.setupTavernRoomBus(this.ctx);
     }
     if (this.ctx.state === 'suspended') {
       void this.ctx.resume();
     }
     return this.ctx;
+  }
+
+  /**
+   * Subtle wooden-tavern slapback room warmth + gentle limiter so voices feel rich, not sterile.
+   */
+  private setupTavernRoomBus(ctx: AudioContext): void {
+    const input = ctx.createGain();
+    input.gain.setValueAtTime(0.95, ctx.currentTime);
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-12, ctx.currentTime);
+    compressor.ratio.setValueAtTime(3.5, ctx.currentTime);
+
+    // Dry path
+    input.connect(compressor);
+
+    // Subtle warm room reflection (two short taps)
+    const delayA = ctx.createDelay(0.25);
+    delayA.delayTime.setValueAtTime(0.068, ctx.currentTime);
+    const delayB = ctx.createDelay(0.25);
+    delayB.delayTime.setValueAtTime(0.118, ctx.currentTime);
+
+    const roomFilter = ctx.createBiquadFilter();
+    roomFilter.type = 'lowpass';
+    roomFilter.frequency.setValueAtTime(1650, ctx.currentTime);
+
+    const wetGain = ctx.createGain();
+    wetGain.gain.setValueAtTime(0.16, ctx.currentTime);
+
+    input.connect(delayA);
+    input.connect(delayB);
+    delayA.connect(roomFilter);
+    delayB.connect(roomFilter);
+    roomFilter.connect(wetGain);
+    wetGain.connect(compressor);
+
+    compressor.connect(ctx.destination);
+    this.busInput = input;
+  }
+
+  private getDestination(ctx: AudioContext): AudioNode {
+    return this.busInput ?? ctx.destination;
   }
 
   public unlock(): void {
@@ -44,6 +89,8 @@ class SoundEngine {
     this.muted = mute;
     if (mute && this.ctx && this.ctx.state === 'running') {
       void this.ctx.suspend();
+    } else if (!mute && this.ctx && this.ctx.state === 'suspended') {
+      void this.ctx.resume();
     }
   }
 
@@ -56,15 +103,21 @@ class SoundEngine {
   }
 
   /**
-   * Synthesizes a note using the currently selected keyboard voice.
+   * Synthesizes a note using the selected voice or an explicit voiceOverride (fixes B5 preview race).
    */
-  public playNote(midi: number, durationMs = 420): void {
+  public playNote(
+    midi: number,
+    durationMs = 420,
+    voiceOverride?: KeyboardVoiceId
+  ): void {
     const ctx = this.ensureContext();
     if (!ctx) return;
 
+    const activeVoice = voiceOverride ?? this.voice;
     const now = ctx.currentTime;
     const dur = Math.max(0.18, durationMs / 1000);
     const freq = midiToFrequency(midi);
+    const dest = this.getDestination(ctx);
 
     const masterGain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
@@ -74,7 +127,27 @@ class SoundEngine {
     const osc2 = ctx.createOscillator();
     const osc2Gain = ctx.createGain();
 
-    switch (this.voice) {
+    switch (activeVoice) {
+      case 'tavern_lute': {
+        // Warm plucked acoustic lute: crisp string attack + wooden soundboard resonance
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        osc2Gain.gain.setValueAtTime(0.28, now);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.015, now + 0.16);
+        filter.frequency.setValueAtTime(Math.min(5800, freq * 8.5), now);
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(460, freq * 1.9),
+          now + Math.min(0.24, dur * 0.7)
+        );
+        filter.Q.setValueAtTime(1.6, now);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.32, now + 0.005);
+        masterGain.gain.exponentialRampToValueAtTime(0.09, now + 0.14);
+        masterGain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.2);
+        break;
+      }
       case 'harpsichord': {
         osc1.type = 'sawtooth';
         osc1.frequency.setValueAtTime(freq, now);
@@ -266,12 +339,98 @@ class SoundEngine {
     osc2.connect(osc2Gain);
     osc2Gain.connect(filter);
     filter.connect(masterGain);
-    masterGain.connect(ctx.destination);
+    masterGain.connect(dest);
 
     osc1.start(now);
     osc2.start(now);
     osc1.stop(now + dur + 0.24);
     osc2.stop(now + dur + 0.24);
+  }
+
+  /**
+   * Soft root-5th lute pluck cue before a melody demo so the player's ear locks into the key.
+   */
+  public playChordCue(tonicMidi: number): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const base = tonicMidi >= 67 ? tonicMidi - 12 : tonicMidi - 12;
+    this.playNote(base, 260, 'tavern_lute');
+    window.setTimeout(() => {
+      this.playNote(base + 7, 260, 'tavern_lute');
+    }, 55);
+  }
+
+  /**
+   * Procedural wood clack or felt thud for 3D d20 physics collisions.
+   */
+  public playDiceHit(intensity: number, surface: 'wood' | 'felt'): void {
+    const nowMs = performance.now();
+    if (nowMs - this.lastDiceHitMs < 42) return;
+    this.lastDiceHitMs = nowMs;
+
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const clamped = Math.max(0.08, Math.min(1, intensity));
+    const now = ctx.currentTime;
+    const dest = this.getDestination(ctx);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    if (surface === 'wood') {
+      // Crisp walnut tray clack
+      const pitch = 340 + Math.random() * 140;
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(pitch * 0.48, now + 0.055);
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(920, now);
+      filter.Q.setValueAtTime(1.8, now);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.24 * clamped, now + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+    } else {
+      // Soft felt thump
+      const pitch = 135 + Math.random() * 45;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(62, now + 0.07);
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(420, now);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.22 * clamped, now + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    }
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  public playChestShake(): void {
+    this.playDiceHit(0.6, 'wood');
+    window.setTimeout(() => this.playDiceHit(0.8, 'wood'), 140);
+    window.setTimeout(() => this.playDiceHit(0.55, 'wood'), 280);
+  }
+
+  public playRarityReveal(rarity: RelicRarity): void {
+    const chord =
+      rarity === 'mythic'
+        ? [60, 64, 67, 71, 74, 79]
+        : rarity === 'rare'
+          ? [60, 64, 67, 72]
+          : rarity === 'uncommon'
+            ? [60, 64, 67]
+            : [60, 67];
+    const voice: KeyboardVoiceId =
+      rarity === 'mythic' || rarity === 'rare' ? 'celesta' : 'tavern_lute';
+    chord.forEach((n, idx) => {
+      window.setTimeout(() => this.playNote(n, 340, voice), idx * 75);
+    });
   }
 
   public playWrongNote(): void {
@@ -304,7 +463,7 @@ class SoundEngine {
   public playFanfare(): void {
     const notes = [60, 64, 67, 72];
     notes.forEach((n, idx) => {
-      setTimeout(() => this.playNote(n, 320), idx * 95);
+      window.setTimeout(() => this.playNote(n, 320), idx * 95);
     });
   }
 
@@ -330,7 +489,8 @@ class SoundEngine {
 
   public playTomatoSplat(): void {
     this.playLowDrum();
-    setTimeout(() => this.playWrongNote(), 110);
+    window.setTimeout(() => this.playWrongNote(), 110);
+    window.setTimeout(() => this.playDiceHit(0.9, 'felt'), 210);
   }
 }
 

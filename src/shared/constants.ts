@@ -331,6 +331,7 @@ export const RELIC_CATALOG: readonly RelicMeta[] = [
 export type KeyboardVoiceMeta = {
   id:
     | 'grand_piano'
+    | 'tavern_lute'
     | 'honky_tonk'
     | 'harpsichord'
     | 'music_box'
@@ -355,6 +356,13 @@ export const KEYBOARD_VOICES: readonly KeyboardVoiceMeta[] = [
     description: 'Warm wooden upright piano.',
     unlockRelics: 0,
     icon: '🎹',
+  },
+  {
+    id: 'tavern_lute',
+    name: 'Tavern Lute',
+    description: 'Crisp plucked fantasy lute strings.',
+    unlockRelics: 0,
+    icon: '🪕',
   },
   {
     id: 'honky_tonk',
@@ -498,4 +506,24 @@ export function getDailyBounty(utcDate: string): DailyBountyMeta {
   const idx = Math.abs(hash) % DAILY_BOUNTIES.length;
   return DAILY_BOUNTIES[idx]!;
 }
+
+export const COMMUNITY_DAILY_XP_GOAL = 2500;
+export const ENCORE_XP_BONUS_RATE = 0.15;
+
+/**
+ * Returns ISO-8601 UTC week key (e.g., "2026-W48") starting Monday 00:00 UTC.
+ */
+export function getIsoWeekKey(date = new Date()): string {
+  const d = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+  const dayNum = d.getUTCDay() || 7; // Monday = 1 .. Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Nearest Thursday determines ISO week-year
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(
+    ((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7
+  );
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
 

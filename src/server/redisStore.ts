@@ -1,25 +1,36 @@
+import { randomInt } from 'node:crypto';
 import { redis } from '@devvit/web/server';
 import {
   BASE_XP_PER_RUN,
+  COMMUNITY_DAILY_XP_GOAL,
   DUPE_PITY_THRESHOLD,
+  ENCORE_XP_BONUS_RATE,
   FAIL_ACCURACY_THRESHOLD,
   getDailyBounty,
+  getIsoWeekKey,
   getLevelFromXp,
   getTierForRoll,
   getTitleForLevel,
   KEYBOARD_VOICES,
   RELIC_CATALOG,
 } from '../shared/constants';
+import { cyrb128 } from '../shared/prng';
 import type {
   DailyState,
   KeyboardVoiceId,
+  LeaderboardBoard,
   LeaderboardEntry,
   LeaderboardResponse,
+  NoteResult,
   OpenChestResponse,
   PlayerProfile,
   RareFeat,
   SubmitAttemptResponse,
+  TavernStats,
 } from '../shared/api';
+
+const TTL_48H_SECONDS = 48 * 3600;
+const TTL_7D_SECONDS = 7 * 24 * 3600;
 
 export function getUtcDateKey(date = new Date()): string {
   return date.toISOString().slice(0, 10);
@@ -41,6 +52,18 @@ function profileKey(playerKey: string): string {
 
 function dailyKey(playerKey: string, utcDate: string): string {
   return `user:${playerKey}:day:${utcDate}`;
+}
+
+function rollersKey(utcDate: string): string {
+  return `tavern:rollers:${utcDate}`;
+}
+
+function tavernStatsKey(utcDate: string): string {
+  return `tavern:stats:${utcDate}`;
+}
+
+function weeklyBoardKey(weekKey: string): string {
+  return `lb:xp:weekly:${weekKey}`;
 }
 
 function parseFeats(raw?: string): RareFeat[] {
@@ -65,6 +88,50 @@ function parseStringArray(raw?: string): string[] {
   }
 }
 
+function sanitizeNoteResults(raw?: NoteResult[]): NoteResult[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 32) {
+    return undefined;
+  }
+  const clean = raw.filter(
+    (r): r is NoteResult => r === 'hit' || r === 'grace' || r === 'miss'
+  );
+  return clean.length > 0 ? clean : undefined;
+}
+
+export type StoredLastRun = {
+  utcDate: string;
+  roll: number;
+  accuracy: number;
+  xpEarned: number;
+  passed: boolean;
+  noteResults?: NoteResult[];
+};
+
+export async function getTavernStats(
+  utcDate = getUtcDateKey()
+): Promise<TavernStats> {
+  const [rollersToday, statsData] = await Promise.all([
+    redis.zCard(rollersKey(utcDate)).catch(() => 0),
+    redis.hGetAll(tavernStatsKey(utcDate)).catch(() => ({} as Record<string, string>)),
+  ]);
+
+  const tomatoesToday = statsData.tomatoes
+    ? parseInt(statsData.tomatoes, 10)
+    : 0;
+  const communityXpToday = statsData.communityXp
+    ? parseInt(statsData.communityXp, 10)
+    : 0;
+
+  return {
+    utcDate,
+    rollersToday,
+    tomatoesToday,
+    communityXpToday,
+    communityGoalXp: COMMUNITY_DAILY_XP_GOAL,
+    encoreActive: communityXpToday >= COMMUNITY_DAILY_XP_GOAL,
+  };
+}
+
 export async function getPlayerProfile(
   playerKey: string,
   username: string,
@@ -76,7 +143,9 @@ export async function getPlayerProfile(
   const level = getLevelFromXp(totalXp);
   const title = getTitleForLevel(level);
   const streak = data.streak ? parseInt(data.streak, 10) : 0;
-  const streakFreezes = data.streakFreezes ? parseInt(data.streakFreezes, 10) : 0;
+  const streakFreezes = data.streakFreezes
+    ? parseInt(data.streakFreezes, 10)
+    : 0;
   const dupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
@@ -146,25 +215,52 @@ export async function unlockFeatIfNew(
   return true;
 }
 
+/**
+ * Generates an authoritative 1..20 d20 roll server-side (fixes B3) and records
+ * the distinct daily roller in tavern:rollers:<YYYY-MM-DD> without PII (Issue #7).
+ */
 export async function commitRoll(
   playerKey: string,
-  roll: number,
   isReroll: boolean
-): Promise<{ daily: DailyState; unlockedFeat: RareFeat | null }> {
-  const clamped = Math.max(1, Math.min(20, Math.round(roll)));
+): Promise<{
+  roll: number;
+  daily: DailyState;
+  unlockedFeat: RareFeat | null;
+  unlockedFeats: RareFeat[];
+  tavernStats: TavernStats;
+}> {
   const utcDate = getUtcDateKey();
   const key = dailyKey(playerKey, utcDate);
   const current = await getDailyState(playerKey, utcDate);
+  const rolledValue = randomInt(1, 21);
+  const nowMs = String(Date.now());
 
   if (!isReroll) {
-    if (current.initialRoll !== null) {
-      return { daily: current, unlockedFeat: null };
+    if (current.initialRoll !== null && current.finalRoll !== null) {
+      const tavernStats = await getTavernStats(utcDate);
+      return {
+        roll: current.finalRoll,
+        daily: current,
+        unlockedFeat: null,
+        unlockedFeats: [],
+        tavernStats,
+      };
     }
-    await redis.hSet(key, {
-      initialRoll: String(clamped),
-      finalRoll: String(clamped),
-      rerollUsed: '0',
-    });
+
+    // Hash playerKey so zero usernames/PII are stored in the daily rollers set
+    const anonMember = cyrb128(`${utcDate}:${playerKey}`).join(':');
+    const rKey = rollersKey(utcDate);
+
+    await Promise.all([
+      redis.hSet(key, {
+        initialRoll: String(rolledValue),
+        finalRoll: String(rolledValue),
+        rerollUsed: '0',
+        lastRollAt: nowMs,
+      }),
+      redis.zAdd(rKey, { member: anonMember, score: Date.now() }),
+      redis.expire(rKey, TTL_48H_SECONDS),
+    ]);
   } else {
     if (current.initialRoll === null) {
       throw new Error('Must make an initial roll before rerolling');
@@ -173,21 +269,30 @@ export async function commitRoll(
       throw new Error('Daily reroll has already been used');
     }
     await redis.hSet(key, {
-      reroll: String(clamped),
-      finalRoll: String(clamped),
+      reroll: String(rolledValue),
+      finalRoll: String(rolledValue),
       rerollUsed: '1',
+      lastRollAt: nowMs,
     });
   }
 
-  let unlockedFeat: RareFeat | null = null;
-  if (clamped === 20) {
+  const unlockedFeats: RareFeat[] = [];
+  if (rolledValue === 20) {
     const isNew = await unlockFeatIfNew(playerKey, 'nat20');
-    if (isNew) unlockedFeat = 'nat20';
+    if (isNew) unlockedFeats.push('nat20');
   }
 
+  const [daily, tavernStats] = await Promise.all([
+    getDailyState(playerKey, utcDate),
+    getTavernStats(utcDate),
+  ]);
+
   return {
-    daily: await getDailyState(playerKey, utcDate),
-    unlockedFeat,
+    roll: rolledValue,
+    daily,
+    unlockedFeat: unlockedFeats[0] ?? null,
+    unlockedFeats,
+    tavernStats,
   };
 }
 
@@ -197,29 +302,65 @@ export async function submitAttempt(
   isAnonymous: boolean,
   rawAccuracy: number,
   snoovatarUrl?: string | null,
-  graceUsed = false
+  graceUsed = false,
+  rawNoteResults?: NoteResult[],
+  requestedUtcDate?: string
 ): Promise<SubmitAttemptResponse> {
   const accuracy = Math.max(0, Math.min(1, rawAccuracy));
-  const utcDate = getUtcDateKey();
-  const yesterdayUtc = getYesterdayUtcKey();
-  const twoDaysAgoUtc = getTwoDaysAgoUtcKey();
-  const dKey = dailyKey(playerKey, utcDate);
+  const now = new Date();
+  const todayUtc = getUtcDateKey(now);
+  const yesterdayUtc = getYesterdayUtcKey(now);
+  const twoDaysAgoUtc = getTwoDaysAgoUtcKey(now);
   const pKey = profileKey(playerKey);
 
-  const [profile, daily] = await Promise.all([
-    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
-    getDailyState(playerKey, utcDate),
-  ]);
+  // B7 fix: if a run started right before 00:00 UTC and finished after midnight,
+  // allow submitting against yesterday's rolled daily state when today has no roll yet.
+  let targetUtcDate = todayUtc;
+  let daily = await getDailyState(playerKey, todayUtc);
+  if (
+    daily.finalRoll === null &&
+    requestedUtcDate === yesterdayUtc
+  ) {
+    const prevDaily = await getDailyState(playerKey, yesterdayUtc);
+    if (prevDaily.finalRoll !== null) {
+      targetUtcDate = yesterdayUtc;
+      daily = prevDaily;
+    }
+  }
 
   if (daily.finalRoll === null) {
     throw new Error('Roll the d20 before submitting an attempt');
   }
 
+  const dKey = dailyKey(playerKey, targetUtcDate);
+  const [profile, rawDailyHash, currentStats] = await Promise.all([
+    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
+    redis.hGetAll(dKey),
+    getTavernStats(targetUtcDate),
+  ]);
+
+  // B3 fix: enforce a minimum plausible elapsed time between runs to prevent script XP farming
   const tier = getTierForRoll(daily.finalRoll);
+  const minRunDurationMs = Math.max(800, tier.minNotes * 110);
+  const lastActivityMs = Math.max(
+    rawDailyHash.lastAttemptAt ? parseInt(rawDailyHash.lastAttemptAt, 10) : 0,
+    rawDailyHash.lastRollAt ? parseInt(rawDailyHash.lastRollAt, 10) : 0
+  );
+  const nowMs = Date.now();
+  if (lastActivityMs > 0 && nowMs - lastActivityMs < minRunDurationMs) {
+    throw new Error('Too fast! Finish playing the melody before submitting.');
+  }
+
   const passed = accuracy >= FAIL_ACCURACY_THRESHOLD;
   const baseXpEarned = passed
     ? Math.round(BASE_XP_PER_RUN * tier.xpMultiplier * accuracy)
     : 0;
+
+  // Community Co-Op Tavern Tip Jar Encore Buff (+15% XP when subreddit daily goal is met)
+  const encoreBonusXp =
+    passed && currentStats.encoreActive
+      ? Math.round(baseXpEarned * ENCORE_XP_BONUS_RATE)
+      : 0;
 
   const newAttemptsCount = daily.attemptsCount + 1;
   const newClearsCount = daily.clearsCount + (passed ? 1 : 0);
@@ -228,7 +369,7 @@ export async function submitAttempt(
   let bountyCompletedXp = 0;
   let newBountyClaimed = daily.bountyClaimed;
   if (!daily.bountyClaimed) {
-    const bounty = getDailyBounty(utcDate);
+    const bounty = getDailyBounty(targetUtcDate);
     const completed =
       (bounty.id === 'accuracy90' && passed && accuracy >= 0.9) ||
       (bounty.id === 'runs3' && newAttemptsCount >= 3) ||
@@ -241,7 +382,7 @@ export async function submitAttempt(
     }
   }
 
-  const xpEarned = baseXpEarned + bountyCompletedXp;
+  const xpEarned = baseXpEarned + encoreBonusXp + bountyCompletedXp;
   const previousLevel = profile.level;
   const newTotalXp = profile.totalXp + xpEarned;
   const newLevel = getLevelFromXp(newTotalXp);
@@ -254,8 +395,11 @@ export async function submitAttempt(
   let streakSavedByFreeze = false;
   let newLastPlayedDate = profile.lastPlayedDate;
 
-  if (passed && profile.lastPlayedDate !== utcDate) {
-    if (profile.lastPlayedDate === yesterdayUtc) {
+  if (passed && profile.lastPlayedDate !== targetUtcDate) {
+    if (
+      profile.lastPlayedDate === yesterdayUtc ||
+      (targetUtcDate === yesterdayUtc && profile.lastPlayedDate === twoDaysAgoUtc)
+    ) {
       newStreak = profile.streak + 1;
     } else if (
       profile.lastPlayedDate === twoDaysAgoUtc &&
@@ -267,7 +411,7 @@ export async function submitAttempt(
     } else {
       newStreak = 1;
     }
-    newLastPlayedDate = utcDate;
+    newLastPlayedDate = targetUtcDate;
 
     // Earn a Streak Freeze at every 5-day streak milestone (max 1 held)
     if (newStreak >= 5 && newStreak % 5 === 0 && newStreakFreezes < 1) {
@@ -276,11 +420,11 @@ export async function submitAttempt(
   }
 
   const nextFeats = [...profile.feats];
-  let unlockedFeat: RareFeat | null = null;
+  const unlockedFeats: RareFeat[] = [];
   const grant = (feat: RareFeat) => {
     if (!nextFeats.includes(feat)) {
       nextFeats.push(feat);
-      if (!unlockedFeat) unlockedFeat = feat;
+      unlockedFeats.push(feat);
     }
   };
 
@@ -314,6 +458,19 @@ export async function submitAttempt(
     newChestsEarned = 2;
   }
 
+  const noteResults = sanitizeNoteResults(rawNoteResults);
+  const lastRunSnapshot: StoredLastRun = {
+    utcDate: targetUtcDate,
+    roll: daily.finalRoll,
+    accuracy,
+    xpEarned,
+    passed,
+    ...(noteResults ? { noteResults } : {}),
+  };
+
+  const tStatsKey = tavernStatsKey(targetUtcDate);
+  const weekKey = getIsoWeekKey(now);
+
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       attemptsCount: String(newAttemptsCount),
@@ -322,6 +479,8 @@ export async function submitAttempt(
       todayXp: String(newTodayXp),
       chestsEarned: String(newChestsEarned),
       bountyClaimed: newBountyClaimed ? '1' : '0',
+      lastAttemptAt: String(nowMs),
+      lastRun: JSON.stringify(lastRunSnapshot),
     }),
     redis.hSet(pKey, {
       username,
@@ -336,6 +495,20 @@ export async function submitAttempt(
     }),
   ];
 
+  if (!passed) {
+    updates.push(
+      redis.hIncrBy(tStatsKey, 'tomatoes', 1),
+      redis.expire(tStatsKey, TTL_7D_SECONDS)
+    );
+  }
+
+  if (xpEarned > 0) {
+    updates.push(
+      redis.hIncrBy(tStatsKey, 'communityXp', xpEarned),
+      redis.expire(tStatsKey, TTL_7D_SECONDS)
+    );
+  }
+
   if (!isAnonymous && resolvedAvatar) {
     updates.push(redis.hSet('lb:snoovatars', { [username]: resolvedAvatar }));
   }
@@ -343,22 +516,31 @@ export async function submitAttempt(
   if (!isAnonymous && xpEarned > 0) {
     updates.push(
       redis.zAdd('lb:xp:alltime', { member: username, score: newTotalXp }),
-      redis.zAdd(`lb:xp:daily:${utcDate}`, { member: username, score: newTodayXp })
+      redis.zAdd(`lb:xp:daily:${targetUtcDate}`, {
+        member: username,
+        score: newTodayXp,
+      }),
+      redis.zIncrBy(weeklyBoardKey(weekKey), username, xpEarned)
     );
   }
 
   await Promise.all(updates);
+
+  const updatedStats = await getTavernStats(targetUtcDate);
 
   return {
     type: 'attempt',
     passed,
     accuracy,
     xpEarned,
+    encoreBonusXp,
     bountyCompletedXp,
     streakSavedByFreeze,
     leveledUp,
     previousLevel,
-    unlockedFeat,
+    unlockedFeat: unlockedFeats[0] ?? null,
+    unlockedFeats,
+    ...(noteResults ? { noteResults } : {}),
     profile: {
       username,
       isAnonymous,
@@ -383,18 +565,52 @@ export async function submitAttempt(
       chestsEarned: newChestsEarned,
       bountyClaimed: newBountyClaimed,
     },
+    tavernStats: updatedStats,
   };
+}
+
+export async function getLastRunForShare(
+  playerKey: string,
+  requestedUtcDate?: string
+): Promise<StoredLastRun | null> {
+  const datesToCheck = [
+    requestedUtcDate,
+    getUtcDateKey(),
+    getYesterdayUtcKey(),
+  ].filter((d): d is string => Boolean(d));
+
+  for (const d of datesToCheck) {
+    const raw = await redis.hGet(dailyKey(playerKey, d), 'lastRun');
+    if (raw) {
+      try {
+        return JSON.parse(raw) as StoredLastRun;
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+  }
+  return null;
+}
+
+export async function claimShareCommentSlot(
+  playerKey: string,
+  postId: string,
+  utcDate: string
+): Promise<boolean> {
+  const key = `share:${postId}:${utcDate}`;
+  const count = await redis.hIncrBy(key, playerKey, 1);
+  if (count === 1) {
+    await redis.expire(key, TTL_48H_SECONDS);
+    return true;
+  }
+  return false;
 }
 
 async function fetchSingleBoard(
   zsetKey: string,
   username: string,
   isAnonymous: boolean
-): Promise<{
-  top: LeaderboardEntry[];
-  myRank: number | null;
-  myScore: number;
-}> {
+): Promise<LeaderboardBoard> {
   const [rawTop, totalCount, ascRank, score] = await Promise.all([
     redis.zRange(zsetKey, 0, 9, { by: 'rank', reverse: true }),
     redis.zCard(zsetKey),
@@ -431,16 +647,21 @@ export async function getLeaderboards(
   username: string,
   isAnonymous: boolean
 ): Promise<LeaderboardResponse> {
-  const utcDate = getUtcDateKey();
-  const [daily, allTime] = await Promise.all([
+  const now = new Date();
+  const utcDate = getUtcDateKey(now);
+  const weekKey = getIsoWeekKey(now);
+  const [daily, weekly, allTime] = await Promise.all([
     fetchSingleBoard(`lb:xp:daily:${utcDate}`, username, isAnonymous),
+    fetchSingleBoard(weeklyBoardKey(weekKey), username, isAnonymous),
     fetchSingleBoard('lb:xp:alltime', username, isAnonymous),
   ]);
 
   return {
     type: 'leaderboard',
     utcDate,
+    weekKey,
     daily,
+    weekly,
     allTime,
   };
 }
@@ -451,7 +672,9 @@ export async function openMysteryChest(
   isAnonymous: boolean,
   snoovatarUrl?: string | null
 ): Promise<OpenChestResponse> {
-  const utcDate = getUtcDateKey();
+  const now = new Date();
+  const utcDate = getUtcDateKey(now);
+  const weekKey = getIsoWeekKey(now);
   const dKey = dailyKey(playerKey, utcDate);
   const pKey = profileKey(playerKey);
 
@@ -464,8 +687,15 @@ export async function openMysteryChest(
     throw new Error('No unopened Mystery Chest available right now.');
   }
 
+  // B8 fix: atomically claim a chest slot to prevent double-open race conditions
+  const newChestsOpened = await redis.hIncrBy(dKey, 'chestsOpened', 1);
+  if (newChestsOpened > daily.chestsEarned) {
+    await redis.hIncrBy(dKey, 'chestsOpened', -1);
+    throw new Error('No unopened Mystery Chest available right now.');
+  }
+
   // Higher rarity odds on bonus (2nd) chest
-  const isBonus = daily.chestsOpened >= 1;
+  const isBonus = newChestsOpened >= 2;
   const r = Math.random();
   const rarity = isBonus
     ? r < 0.15
@@ -484,7 +714,8 @@ export async function openMysteryChest(
           : 'common';
 
   const pool = RELIC_CATALOG.filter((item) => item.rarity === rarity);
-  let picked = pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
+  let picked =
+    pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
   let isDuplicate = profile.relics.includes(picked.id);
   let pityTriggered = false;
   let nextDupePity = isDuplicate ? profile.dupePity + 1 : 0;
@@ -511,18 +742,19 @@ export async function openMysteryChest(
   const nextRelics = isDuplicate
     ? profile.relics
     : [...profile.relics, picked.id];
+  const previousLevel = profile.level;
   const newTotalXp = profile.totalXp + bonusXp;
   const newLevel = getLevelFromXp(newTotalXp);
   const newTitle = getTitleForLevel(newLevel);
+  const leveledUp = newLevel > previousLevel;
   const newTodayXp = daily.todayXp + bonusXp;
-  const newChestsOpened = daily.chestsOpened + 1;
 
   const nextFeats = [...profile.feats];
-  let unlockedFeat: RareFeat | null = null;
+  const unlockedFeats: RareFeat[] = [];
   const grant = (feat: RareFeat) => {
     if (!nextFeats.includes(feat)) {
       nextFeats.push(feat);
-      if (!unlockedFeat) unlockedFeat = feat;
+      unlockedFeats.push(feat);
     }
   };
 
@@ -535,7 +767,6 @@ export async function openMysteryChest(
 
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
-      chestsOpened: String(newChestsOpened),
       todayXp: String(newTodayXp),
     }),
     redis.hSet(pKey, {
@@ -548,10 +779,22 @@ export async function openMysteryChest(
     }),
   ];
 
+  if (bonusXp > 0) {
+    const tStatsKey = tavernStatsKey(utcDate);
+    updates.push(
+      redis.hIncrBy(tStatsKey, 'communityXp', bonusXp),
+      redis.expire(tStatsKey, TTL_7D_SECONDS)
+    );
+  }
+
   if (!isAnonymous && bonusXp > 0) {
     updates.push(
       redis.zAdd('lb:xp:alltime', { member: username, score: newTotalXp }),
-      redis.zAdd(`lb:xp:daily:${utcDate}`, { member: username, score: newTodayXp })
+      redis.zAdd(`lb:xp:daily:${utcDate}`, {
+        member: username,
+        score: newTodayXp,
+      }),
+      redis.zIncrBy(weeklyBoardKey(weekKey), username, bonusXp)
     );
   }
 
@@ -563,7 +806,10 @@ export async function openMysteryChest(
     isDuplicate,
     pityTriggered,
     bonusXp,
-    unlockedFeat,
+    leveledUp,
+    previousLevel,
+    unlockedFeat: unlockedFeats[0] ?? null,
+    unlockedFeats,
     profile: {
       ...profile,
       relics: nextRelics,
@@ -602,5 +848,41 @@ export async function selectKeyboardVoice(
   return {
     ...profile,
     selectedVoice: voiceId,
+  };
+}
+
+export async function getDailyPostId(utcDate: string): Promise<string | null> {
+  const id = await redis.get(`tavern:dailyPost:${utcDate}`);
+  return id || null;
+}
+
+export async function setDailyPostId(
+  utcDate: string,
+  postId: string
+): Promise<void> {
+  await redis.set(`tavern:dailyPost:${utcDate}`, postId, {
+    expiration: new Date(Date.now() + TTL_7D_SECONDS * 1000),
+  });
+}
+
+export async function getYesterdayRecap(yesterdayUtc: string): Promise<{
+  topBard: { username: string; score: number } | null;
+  rollersCount: number;
+  tomatoesCount: number;
+  communityXp: number;
+}> {
+  const [rawTop, stats] = await Promise.all([
+    redis
+      .zRange(`lb:xp:daily:${yesterdayUtc}`, 0, 0, { by: 'rank', reverse: true })
+      .catch(() => []),
+    getTavernStats(yesterdayUtc),
+  ]);
+
+  const first = rawTop[0];
+  return {
+    topBard: first ? { username: first.member, score: first.score } : null,
+    rollersCount: stats.rollersToday,
+    tomatoesCount: stats.tomatoesToday,
+    communityXp: stats.communityXpToday,
   };
 }

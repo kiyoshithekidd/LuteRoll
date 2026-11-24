@@ -17,8 +17,11 @@ export type RareFeat =
 
 export type RelicRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
 
+export type NoteResult = 'hit' | 'grace' | 'miss';
+
 export type KeyboardVoiceId =
   | 'grand_piano'
+  | 'tavern_lute'
   | 'honky_tonk'
   | 'harpsichord'
   | 'music_box'
@@ -62,13 +65,25 @@ export type DailyState = {
   bountyClaimed: boolean;
 };
 
+export type TavernStats = {
+  utcDate: string;
+  rollersToday: number;
+  tomatoesToday: number;
+  communityXpToday: number;
+  communityGoalXp: number;
+  encoreActive: boolean;
+};
+
 export type OpenChestResponse = {
   type: 'open-chest';
   relicId: string;
   isDuplicate: boolean;
   pityTriggered?: boolean;
   bonusXp: number;
+  leveledUp: boolean;
+  previousLevel: number;
   unlockedFeat?: RareFeat | null;
+  unlockedFeats: RareFeat[];
   profile: PlayerProfile;
   daily: DailyState;
 };
@@ -79,22 +94,27 @@ export type StateResponse = {
   isDevSubreddit?: boolean;
   profile: PlayerProfile;
   daily: DailyState;
+  tavernStats?: TavernStats | undefined;
 };
 
 export type CommitRollRequest = {
-  roll: number;
   isReroll?: boolean;
 };
 
 export type CommitRollResponse = {
   type: 'roll';
+  roll: number;
   daily: DailyState;
   unlockedFeat: RareFeat | null;
+  unlockedFeats: RareFeat[];
+  tavernStats?: TavernStats;
 };
 
 export type SubmitAttemptRequest = {
   accuracy: number; // 0..1
   graceUsed?: boolean;
+  noteResults?: NoteResult[];
+  utcDate?: string;
 };
 
 export type SubmitAttemptResponse = {
@@ -102,13 +122,17 @@ export type SubmitAttemptResponse = {
   passed: boolean;
   accuracy: number;
   xpEarned: number;
+  encoreBonusXp?: number;
   bountyCompletedXp?: number;
   streakSavedByFreeze?: boolean;
   leveledUp: boolean;
   previousLevel: number;
   unlockedFeat: RareFeat | null;
+  unlockedFeats: RareFeat[];
+  noteResults?: NoteResult[];
   profile: PlayerProfile;
   daily: DailyState;
+  tavernStats?: TavernStats;
 };
 
 export type LeaderboardEntry = {
@@ -119,27 +143,28 @@ export type LeaderboardEntry = {
 };
 
 export type ShareCommentRequest = {
-  text: string;
+  utcDate?: string;
 };
 
 export type ShareCommentResponse = {
   type: 'share-comment';
   ok: boolean;
+  alreadyShared?: boolean;
+};
+
+export type LeaderboardBoard = {
+  top: LeaderboardEntry[];
+  myRank: number | null;
+  myScore: number;
 };
 
 export type LeaderboardResponse = {
   type: 'leaderboard';
   utcDate: string;
-  daily: {
-    top: LeaderboardEntry[];
-    myRank: number | null;
-    myScore: number;
-  };
-  allTime: {
-    top: LeaderboardEntry[];
-    myRank: number | null;
-    myScore: number;
-  };
+  weekKey: string;
+  daily: LeaderboardBoard;
+  weekly: LeaderboardBoard;
+  allTime: LeaderboardBoard;
 };
 
 export type ErrorResponse = {

@@ -4,9 +4,10 @@ import type { PlayerProfile } from '../shared/api';
 export function formatBardFlairText(profile: PlayerProfile): string {
   const streakPart = profile.streak > 0 ? ` 🔥${profile.streak}` : '';
   let badge = '';
-  if (profile.feats.includes('nat1_clear')) badge = ' 💀';
+  // Prioritize hardest long-term / skill feats over random 1-in-20 Nat 20 roll
+  if (profile.feats.includes('streak30')) badge = ' 🏆';
+  else if (profile.feats.includes('nat1_clear')) badge = ' 💀';
   else if (profile.feats.includes('nat20')) badge = ' 🎲';
-  else if (profile.feats.includes('streak30')) badge = ' 🏆';
 
   // Keep under Reddit's 64-char user flair limit
   const raw = `Lvl ${profile.level} ${profile.title}${streakPart}${badge}`;

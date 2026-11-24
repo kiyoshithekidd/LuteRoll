@@ -14,8 +14,10 @@ import { createRoot } from 'react-dom/client';
 import type {
   CommitRollResponse,
   KeyboardVoiceId,
+  NoteResult,
   OpenChestResponse,
   PlayerProfile,
+  RelicRarity,
   StateResponse,
   SubmitAttemptResponse,
 } from '../shared/api';
@@ -30,6 +32,7 @@ import {
   xpRequiredForLevel,
 } from '../shared/constants';
 import { generateMelody } from '../shared/melodyGenerator';
+import { apiFetch } from './apiClient';
 import streakFlameUrl from './assets/streak-flame.webp';
 import tomatoSplatUrl from './assets/tomato-splat.webp';
 import nat20SealUrl from './assets/nat20-seal.webp';
@@ -59,6 +62,22 @@ const HECKLE_LINES = [
   'The Tavern Keeper reaches for the tomatoes!',
 ];
 
+const RARITY_BORDER: Record<RelicRarity, string> = {
+  common: 'border-stone-400',
+  uncommon: 'border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.45)]',
+  rare: 'border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.55)]',
+  mythic: 'border-[#ffe875] shadow-[0_0_26px_rgba(255,232,117,0.85)]',
+};
+
+const CONFETTI_SPECS = [
+  { left: '12%', delay: '0ms', emoji: '✨' },
+  { left: '26%', delay: '90ms', emoji: '🪙' },
+  { left: '42%', delay: '40ms', emoji: '✨' },
+  { left: '58%', delay: '130ms', emoji: '🎵' },
+  { left: '74%', delay: '60ms', emoji: '✨' },
+  { left: '88%', delay: '150ms', emoji: '🪙' },
+];
+
 export const Game = () => {
   const [state, setState] = useState<StateResponse | null>(null);
   const [phase, setPhase] = useState<Phase>('LOADING');
@@ -70,6 +89,7 @@ export const Game = () => {
 
   // 3D Dice Tray state
   const [rollTrigger, setRollTrigger] = useState(0);
+  const [targetRoll, setTargetRoll] = useState<number | null>(null);
   const [isRolling, setIsRolling] = useState(false);
   const [isRerollPending, setIsRerollPending] = useState(false);
   const [settledBannerValue, setSettledBannerValue] = useState<number | null>(
@@ -78,17 +98,19 @@ export const Game = () => {
 
   // Listen & Play state
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
+  const [demoNoteIdx, setDemoNoteIdx] = useState<number | null>(null);
   const [highlightedMidi, setHighlightedMidi] = useState<number | null>(null);
   const [playIdx, setPlayIdx] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [noteResults, setNoteResults] = useState<('hit' | 'grace' | 'miss')[]>([]);
+  const [comboStreak, setComboStreak] = useState(0);
+  const [noteResults, setNoteResults] = useState<NoteResult[]>([]);
   const [graceRemaining, setGraceRemaining] = useState(0);
   const [graceUsedThisRun, setGraceUsedThisRun] = useState(false);
   const [graceBanner, setGraceBanner] = useState(false);
   const [feedbackMidi, setFeedbackMidi] = useState<number | null>(null);
   const [feedbackState, setFeedbackState] = useState<KeyFeedbackState>(null);
 
-  // Results state
+  // Results & Pizzazz state
   const [lastResult, setLastResult] = useState<SubmitAttemptResponse | null>(
     null
   );
@@ -97,11 +119,16 @@ export const Game = () => {
   );
   const [openingChest, setOpeningChest] = useState(false);
   const [heckle, setHeckle] = useState(HECKLE_LINES[0]!);
+  const [showTomatoBurst, setShowTomatoBurst] = useState(false);
+  const [showConfettiBurst, setShowConfettiBurst] = useState(false);
+  const [shakeStage, setShakeStage] = useState(false);
 
   const demoTimersRef = useRef<number[]>([]);
   const feedbackTimerRef = useRef<number | null>(null);
   const rollPauseTimerRef = useRef<number | null>(null);
+  const burstTimerRef = useRef<number | null>(null);
   const shouldAutoPlayNextListenRef = useRef(false);
+  const pendingRollDataRef = useRef<CommitRollResponse | null>(null);
 
   const clearDemoTimers = useCallback(() => {
     for (const id of demoTimersRef.current) {
@@ -109,13 +136,14 @@ export const Game = () => {
     }
     demoTimersRef.current = [];
     setIsPlayingDemo(false);
+    setDemoNoteIdx(null);
     setHighlightedMidi(null);
   }, []);
 
   useEffect(() => {
     trackAppReady();
     let active = true;
-    void fetch('/api/state')
+    void apiFetch('/api/state')
       .then((res) =>
         res.ok ? res.json() : Promise.reject(new Error('Failed to load state'))
       )
@@ -138,6 +166,9 @@ export const Game = () => {
       if (rollPauseTimerRef.current !== null) {
         window.clearTimeout(rollPauseTimerRef.current);
       }
+      if (burstTimerRef.current !== null) {
+        window.clearTimeout(burstTimerRef.current);
+      }
     };
   }, [clearDemoTimers]);
 
@@ -157,9 +188,17 @@ export const Game = () => {
     setIsPlayingDemo(true);
     trackJourneyProgress(0.55, 'listen_melody');
 
+    // Soft root-5th lute pluck cue before note 0 so the ear locks into the key
+    const firstNote = melody.notes[0];
+    if (firstNote !== undefined) {
+      soundEngine.playChordCue(firstNote);
+    }
+
+    const leadInMs = 280;
     melody.notes.forEach((midi, idx) => {
-      const startAt = idx * melody.tempoMs;
+      const startAt = leadInMs + idx * melody.tempoMs;
       const t1 = window.setTimeout(() => {
+        setDemoNoteIdx(idx);
         setHighlightedMidi(midi);
         soundEngine.playNote(midi, melody.tempoMs * 0.85);
       }, startAt);
@@ -171,8 +210,9 @@ export const Game = () => {
 
     const endTimer = window.setTimeout(() => {
       setIsPlayingDemo(false);
+      setDemoNoteIdx(null);
       setHighlightedMidi(null);
-    }, melody.notes.length * melody.tempoMs + 80);
+    }, leadInMs + melody.notes.length * melody.tempoMs + 90);
     demoTimersRef.current.push(endTimer);
   }, [melody, isPlayingDemo, clearDemoTimers]);
 
@@ -188,20 +228,47 @@ export const Game = () => {
     return undefined;
   }, [phase, melody, playMelodyDemo]);
 
+  const triggerStageEffect = useCallback((kind: 'tomato' | 'confetti') => {
+    if (burstTimerRef.current !== null) {
+      window.clearTimeout(burstTimerRef.current);
+    }
+    if (kind === 'tomato') {
+      setShowTomatoBurst(true);
+      setShakeStage(true);
+      burstTimerRef.current = window.setTimeout(() => {
+        setShowTomatoBurst(false);
+        setShakeStage(false);
+      }, 1300);
+    } else {
+      setShowConfettiBurst(true);
+      burstTimerRef.current = window.setTimeout(() => {
+        setShowConfettiBurst(false);
+      }, 1350);
+    }
+  }, []);
+
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
     soundEngine.setMuted(next);
   };
 
+  const openModal = (modal: 'leaderboard' | 'feats' | 'guide') => {
+    clearDemoTimers();
+    if (modal === 'leaderboard') setShowLeaderboard(true);
+    else if (modal === 'feats') setShowFeats(true);
+    else setShowGuide(true);
+  };
+
   const handleDevReset = async () => {
     try {
       clearDemoTimers();
-      const res = await fetch('/api/dev-reset', { method: 'POST' });
+      const res = await apiFetch('/api/dev-reset', { method: 'POST' });
       if (!res.ok) return;
       const fresh = (await res.json()) as StateResponse;
       setState(fresh);
       setRollTrigger(0);
+      setTargetRoll(null);
       setIsRolling(false);
       setIsRerollPending(false);
       setSettledBannerValue(null);
@@ -209,6 +276,7 @@ export const Game = () => {
       setNoteResults([]);
       setPlayIdx(0);
       setCorrectCount(0);
+      setComboStreak(0);
       setError(null);
       setChestReveal(null);
       setPhase('ROLL');
@@ -220,23 +288,32 @@ export const Game = () => {
   const handleOpenChest = async () => {
     if (openingChest) return;
     setOpeningChest(true);
+    setChestReveal(null);
     try {
       soundEngine.unlock();
-      const res = await fetch('/api/open-chest', { method: 'POST' });
+      soundEngine.playChestShake();
+      const [res] = await Promise.all([
+        apiFetch('/api/open-chest', { method: 'POST' }),
+        new Promise((resolve) => window.setTimeout(resolve, 560)),
+      ]);
       if (!res.ok) return;
       const data = (await res.json()) as OpenChestResponse;
       setChestReveal(data);
       setState((prev) =>
         prev ? { ...prev, profile: data.profile, daily: data.daily } : prev
       );
-      soundEngine.playFanfare();
+      const dropped = RELIC_CATALOG.find((r) => r.id === data.relicId);
+      soundEngine.playRarityReveal(dropped?.rarity ?? 'common');
+      if (dropped?.rarity === 'mythic' || dropped?.rarity === 'rare' || data.leveledUp) {
+        triggerStageEffect('confetti');
+      }
     } finally {
       setOpeningChest(false);
     }
   };
 
   const handleSelectVoice = async (voiceId: KeyboardVoiceId) => {
-    const res = await fetch('/api/voice', {
+    const res = await apiFetch('/api/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ voiceId }),
@@ -247,71 +324,90 @@ export const Game = () => {
     setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
   };
 
-  const handleTriggerRoll = (reroll: boolean) => {
+  // B3 & B4 fix: cancel demo timers first, request authoritative roll from server, then animate 3D d20
+  const handleTriggerRoll = async (reroll: boolean) => {
+    if (isRolling || settledBannerValue !== null) return;
+    clearDemoTimers();
     soundEngine.unlock();
     trackJourneyStart();
     setError(null);
     setSettledBannerValue(null);
     setIsRerollPending(reroll);
     setIsRolling(true);
-    setRollTrigger((n) => n + 1);
     setPhase('ROLL');
+
+    try {
+      const res = await apiFetch('/api/roll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isReroll: reroll }),
+      });
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        throw new Error(errData.message ?? 'Roll failed');
+      }
+      const data = (await res.json()) as CommitRollResponse;
+      pendingRollDataRef.current = data;
+      setTargetRoll(data.roll);
+      setRollTrigger((n) => n + 1);
+    } catch (err) {
+      setIsRolling(false);
+      setError(
+        err instanceof Error ? err.message : 'Failed to roll your d20.'
+      );
+    }
   };
 
   const handleDiceSettled = useCallback(
-    async (value: number) => {
+    (value: number) => {
       setIsRolling(false);
       setSettledBannerValue(value);
-      if (value === 20) soundEngine.playFanfare();
-      else if (value === 1) soundEngine.playLowDrum();
-      else soundEngine.playNote(67, 260);
+      if (value === 20) {
+        soundEngine.playFanfare();
+        triggerStageEffect('confetti');
+      } else if (value === 1) {
+        soundEngine.playLowDrum();
+        setShakeStage(true);
+        window.setTimeout(() => setShakeStage(false), 450);
+      } else {
+        soundEngine.playNote(67, 260, 'tavern_lute');
+      }
 
       trackJourneyProgress(0.3, `rolled_${value}`);
 
-      try {
-        const res = await fetch('/api/roll', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roll: value, isReroll: isRerollPending }),
+      const data = pendingRollDataRef.current;
+      if (data) {
+        pendingRollDataRef.current = null;
+        setState((prev) => {
+          if (!prev) return prev;
+          const mergedFeats = [...prev.profile.feats];
+          for (const f of data.unlockedFeats) {
+            if (!mergedFeats.includes(f)) mergedFeats.push(f);
+          }
+          return {
+            ...prev,
+            daily: data.daily,
+            tavernStats: data.tavernStats ?? prev.tavernStats,
+            profile: {
+              ...prev.profile,
+              feats: mergedFeats,
+            },
+          };
         });
-        if (!res.ok) {
-          const errData = (await res.json()) as { message?: string };
-          throw new Error(errData.message ?? 'Roll failed');
-        }
-        const data = (await res.json()) as CommitRollResponse;
-        setState((prev) =>
-          prev
-            ? {
-                ...prev,
-                daily: data.daily,
-                profile:
-                  data.unlockedFeat &&
-                  !prev.profile.feats.includes(data.unlockedFeat)
-                    ? {
-                        ...prev.profile,
-                        feats: [...prev.profile.feats, data.unlockedFeat],
-                      }
-                    : prev.profile,
-              }
-            : prev
-        );
-
-        if (rollPauseTimerRef.current !== null) {
-          window.clearTimeout(rollPauseTimerRef.current);
-        }
-        rollPauseTimerRef.current = window.setTimeout(() => {
-          setSettledBannerValue(null);
-          shouldAutoPlayNextListenRef.current = true;
-          setPhase('LISTEN');
-        }, 950);
-      } catch (err) {
-        setSettledBannerValue(null);
-        setError(
-          err instanceof Error ? err.message : 'Failed to lock in your roll.'
-        );
       }
+
+      if (rollPauseTimerRef.current !== null) {
+        window.clearTimeout(rollPauseTimerRef.current);
+      }
+      rollPauseTimerRef.current = window.setTimeout(() => {
+        setSettledBannerValue(null);
+        shouldAutoPlayNextListenRef.current = true;
+        setPhase('LISTEN');
+      }, 950);
     },
-    [isRerollPending]
+    [triggerStageEffect]
   );
 
   const startAttempt = () => {
@@ -320,6 +416,7 @@ export const Game = () => {
     clearDemoTimers();
     setPlayIdx(0);
     setCorrectCount(0);
+    setComboStreak(0);
     setNoteResults([]);
     setGraceRemaining(getWardOfGraceCharges(state?.profile.streak ?? 0));
     setGraceUsedThisRun(false);
@@ -327,19 +424,37 @@ export const Game = () => {
     setFeedbackMidi(null);
     setFeedbackState(null);
     setLastResult(null);
+    setChestReveal(null);
+    setError(null);
     setPhase('PLAY');
   };
 
   const finishAttempt = useCallback(
-    async (finalCorrect: number, totalNotes: number, graceUsed: boolean) => {
+    async (
+      finalCorrect: number,
+      totalNotes: number,
+      graceUsed: boolean,
+      finalResults: NoteResult[],
+      activeUtcDate?: string
+    ) => {
       const accuracy = totalNotes > 0 ? finalCorrect / totalNotes : 0;
       try {
-        const res = await fetch('/api/attempt', {
+        const res = await apiFetch('/api/attempt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accuracy, graceUsed }),
+          body: JSON.stringify({
+            accuracy,
+            graceUsed,
+            noteResults: finalResults,
+            utcDate: activeUtcDate,
+          }),
         });
-        if (!res.ok) throw new Error('Failed to save attempt');
+        if (!res.ok) {
+          const errData = (await res.json().catch(() => ({}))) as {
+            message?: string;
+          };
+          throw new Error(errData.message ?? 'Failed to save attempt');
+        }
         const data = (await res.json()) as SubmitAttemptResponse;
         setLastResult(data);
         setState((prev) =>
@@ -348,6 +463,7 @@ export const Game = () => {
                 ...prev,
                 profile: data.profile,
                 daily: data.daily,
+                tavernStats: data.tavernStats ?? prev.tavernStats,
               }
             : prev
         );
@@ -358,15 +474,21 @@ export const Game = () => {
             HECKLE_LINES[Math.floor(Math.random() * HECKLE_LINES.length)]!
           );
           soundEngine.playTomatoSplat();
+          triggerStageEffect('tomato');
         } else if (data.leveledUp || accuracy === 1) {
           soundEngine.playFanfare();
+          triggerStageEffect('confetti');
         }
         setPhase('RESULTS');
-      } catch {
-        setError('Could not save your performance to the tavern ledger.');
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Could not save your performance to the tavern ledger.'
+        );
       }
     },
-    []
+    [triggerStageEffect]
   );
 
   const handleKeyPress = useCallback(
@@ -388,13 +510,16 @@ export const Game = () => {
       }
       if (isExactHit) {
         soundEngine.playNote(midi, 320);
+        setComboStreak((c) => c + 1);
       } else if (wardTriggered) {
         soundEngine.playNote(expected, 280);
         setGraceRemaining((prev) => Math.max(0, prev - 1));
         setGraceUsedThisRun(true);
         setGraceBanner(true);
+        setComboStreak(0);
       } else {
         soundEngine.playWrongNote();
+        setComboStreak(0);
       }
 
       if (feedbackTimerRef.current !== null) {
@@ -410,15 +535,24 @@ export const Game = () => {
       const nextCorrect = correctCount + (countedAsHit ? 1 : 0);
       const nextIdx = playIdx + 1;
       const nextGraceUsed = graceUsedThisRun || wardTriggered;
-      setNoteResults((prev) => [
-        ...prev,
-        isExactHit ? 'hit' : wardTriggered ? 'grace' : 'miss',
-      ]);
+      const nextNoteRes: NoteResult = isExactHit
+        ? 'hit'
+        : wardTriggered
+          ? 'grace'
+          : 'miss';
+      const updatedResults = [...noteResults, nextNoteRes];
+      setNoteResults(updatedResults);
       setCorrectCount(nextCorrect);
       setPlayIdx(nextIdx);
 
       if (nextIdx >= melody.notes.length) {
-        void finishAttempt(nextCorrect, melody.notes.length, nextGraceUsed);
+        void finishAttempt(
+          nextCorrect,
+          melody.notes.length,
+          nextGraceUsed,
+          updatedResults,
+          state?.daily.utcDate
+        );
       }
     },
     [
@@ -428,6 +562,8 @@ export const Game = () => {
       correctCount,
       graceRemaining,
       graceUsedThisRun,
+      noteResults,
+      state?.daily.utcDate,
       finishAttempt,
     ]
   );
@@ -436,6 +572,7 @@ export const Game = () => {
   const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
   const settledTier =
     settledBannerValue !== null ? getTierForRoll(settledBannerValue) : null;
+  const anyModalOpen = showLeaderboard || showFeats || showGuide;
 
   const level = state?.profile.level ?? 1;
   const totalXp = state?.profile.totalXp ?? 0;
@@ -452,8 +589,68 @@ export const Game = () => {
         )
       : 100;
 
+  const tavernStats = lastResult?.tavernStats ?? state?.tavernStats;
+  const tipJarPct = tavernStats
+    ? Math.min(
+        100,
+        Math.round(
+          (tavernStats.communityXpToday /
+            Math.max(1, tavernStats.communityGoalXp)) *
+            100
+        )
+      )
+    : 0;
+
   return (
-    <div className="tavern-stage-bg min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 gap-2.5">
+    <div
+      className={`tavern-stage-bg relative min-h-screen w-full flex flex-col justify-between p-2.5 sm:p-4 gap-2 overflow-x-hidden ${
+        shakeStage ? 'animate-stage-shake' : ''
+      }`}
+    >
+      {/* Procedural Flying Tomato Splat Overlay on Fail (<50%) */}
+      {showTomatoBurst && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+        >
+          <img
+            src={tomatoSplatUrl}
+            alt=""
+            className="animate-tomato-fly absolute top-[18%] left-[12%] w-16 h-16 rounded-full object-cover shadow-xl"
+          />
+          <img
+            src={tomatoSplatUrl}
+            alt=""
+            style={{ animationDelay: '90ms' }}
+            className="animate-tomato-fly absolute top-[26%] right-[14%] w-20 h-20 rounded-full object-cover shadow-xl"
+          />
+          <img
+            src={tomatoSplatUrl}
+            alt=""
+            style={{ animationDelay: '180ms' }}
+            className="animate-tomato-fly absolute top-[44%] left-[38%] w-14 h-14 rounded-full object-cover shadow-xl"
+          />
+        </div>
+      )}
+
+      {/* Procedural Gold Confetti Burst on Nat 20 / Flawless / Rare+ Chest */}
+      {showConfettiBurst && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+        >
+          {CONFETTI_SPECS.map((c, idx) => (
+            <span
+              key={idx}
+              style={{ left: c.left, animationDelay: c.delay }}
+              className="animate-confetti-pop absolute top-[14%] text-xl drop-shadow"
+            >
+              {c.emoji}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Top Tavern HUD */}
       <header className="tavern-wood-frame rounded-xl px-3 py-2 flex flex-col gap-1.5">
         {/* Row 1: Title + Action Buttons */}
@@ -464,7 +661,7 @@ export const Game = () => {
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
-              onClick={() => setShowLeaderboard(true)}
+              onClick={() => openModal('leaderboard')}
               className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
               aria-label="Open leaderboards"
             >
@@ -472,7 +669,7 @@ export const Game = () => {
             </button>
             <button
               type="button"
-              onClick={() => setShowFeats(true)}
+              onClick={() => openModal('feats')}
               className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] cursor-pointer whitespace-nowrap"
               aria-label="Open tavern vault"
             >
@@ -480,7 +677,7 @@ export const Game = () => {
             </button>
             <button
               type="button"
-              onClick={() => setShowGuide(true)}
+              onClick={() => openModal('guide')}
               className="text-[11px] px-2 py-1 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/40 text-[#ffe875] font-bold cursor-pointer"
               aria-label="How to play"
             >
@@ -576,7 +773,7 @@ export const Game = () => {
         )}
 
         {phase === 'ROLL' && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-4 text-center">
+          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-3 text-center">
             <div>
               <h2 className="font-serif text-xl font-bold text-[#ffe875]">
                 {isRerollPending ? 'Daily Reroll' : "Roll Today's d20"}
@@ -609,35 +806,32 @@ export const Game = () => {
                 state.profile.totalXp === 0 &&
                 state.daily.attemptsCount === 0 && (
                   <p className="mt-2 text-[11px] text-[#ffe875] bg-black/40 border border-[#d4af37]/40 rounded-lg px-2.5 py-1">
-                    First time? Roll the die, listen to the tune, then tap it
-                    back note for note.
+                    First time? Tap the tray or button to roll, listen, then tap
+                    it back note for note.
                   </p>
                 )}
             </div>
 
             <div className="relative w-full">
-              {rollTrigger > 0 ? (
-                <Suspense
-                  fallback={
-                    <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex items-center justify-center text-xs text-[#ffe875]">
-                      Preparing dice tray...
-                    </div>
-                  }
-                >
-                  <DiceTray3D
-                    rollTrigger={rollTrigger}
-                    onSettled={(v) => void handleDiceSettled(v)}
-                  />
-                </Suspense>
-              ) : (
-                <div className="tavern-felt-bg w-full h-52 sm:h-60 rounded-xl border-2 border-[#754c28] flex flex-col items-center justify-center gap-2 shadow-inner">
-                  <span className="font-serif text-5xl font-bold text-[#ffe875] drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-                    d20
-                  </span>
-                  <span className="text-xs text-[#f5ead2]/80">
-                    Tap below to toss the gold die onto the felt
-                  </span>
-                </div>
+              <Suspense
+                fallback={
+                  <div className="tavern-felt-bg w-full h-48 sm:h-56 rounded-xl border-2 border-[#754c28] flex items-center justify-center text-xs text-[#ffe875]">
+                    Preparing dice tray...
+                  </div>
+                }
+              >
+                <DiceTray3D
+                  rollTrigger={rollTrigger}
+                  targetRoll={targetRoll}
+                  onSettled={handleDiceSettled}
+                  onTrayTap={() => void handleTriggerRoll(isRerollPending)}
+                />
+              </Suspense>
+
+              {rollTrigger === 0 && !isRolling && (
+                <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-black/60 border border-[#d4af37]/45 text-[10px] font-semibold text-[#ffe875]">
+                  Tap the die or button to toss
+                </span>
               )}
 
               {settledBannerValue !== null && settledTier && (
@@ -659,7 +853,7 @@ export const Game = () => {
             <button
               type="button"
               disabled={isRolling || settledBannerValue !== null}
-              onClick={() => handleTriggerRoll(isRerollPending)}
+              onClick={() => void handleTriggerRoll(isRerollPending)}
               className="gold-btn w-full py-3.5 px-5 rounded-xl font-bold text-base cursor-pointer disabled:opacity-60"
             >
               {isRolling
@@ -672,7 +866,7 @@ export const Game = () => {
         )}
 
         {phase === 'LISTEN' && melody && tier && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
+          <div className="tavern-wood-frame w-full rounded-2xl p-3.5 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
@@ -683,14 +877,14 @@ export const Game = () => {
                     {tier.name} • {tier.xpMultiplier}x XP
                   </span>
                 </div>
-                <p className="text-xs text-[#f5ead2]/80 mt-1">
+                <p className="text-xs text-[#f5ead2]/80 mt-0.5">
                   {melody.notes.length} notes • Highlighted keys are in play
                 </p>
               </div>
               {state && !state.daily.rerollUsed && (
                 <button
                   type="button"
-                  onClick={() => handleTriggerRoll(true)}
+                  onClick={() => void handleTriggerRoll(true)}
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-black/45 hover:bg-black/65 border border-[#d4af37]/45 text-[#ffe875] cursor-pointer shrink-0"
                 >
                   🎲 Reroll (1 left)
@@ -699,15 +893,33 @@ export const Game = () => {
             </div>
 
             {finalRoll === 20 && (
-              <div className="animate-gold-pulse rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-2 text-center text-xs font-bold text-[#ffe875]">
+              <div className="animate-gold-pulse rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1.5 text-center text-xs font-bold text-[#ffe875]">
                 ✨ CRITICAL SUCCESS! Easiest tune with 3.0x XP payout!
               </div>
             )}
             {finalRoll === 1 && (
-              <div className="rounded-xl bg-red-950/80 border border-red-400/60 px-3 py-2 text-center text-xs font-bold text-red-200">
+              <div className="rounded-xl bg-red-950/80 border border-red-400/60 px-3 py-1.5 text-center text-xs font-bold text-red-200">
                 💀 BRUTAL! Hardest tune, clearable for 3.0x XP!
               </div>
             )}
+
+            {/* LISTEN progress pips so players can count notes visually */}
+            <div className="flex gap-1 w-full" aria-hidden="true">
+              {melody.notes.map((_, idx) => {
+                const pipClass =
+                  demoNoteIdx === idx
+                    ? 'bg-[#ffe875] scale-y-125'
+                    : demoNoteIdx !== null && idx < demoNoteIdx
+                      ? 'bg-[#d4af37]/80'
+                      : 'bg-black/45';
+                return (
+                  <div
+                    key={idx}
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-100 ${pipClass}`}
+                  />
+                );
+              })}
+            </div>
 
             <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
               <Keyboard
@@ -741,23 +953,30 @@ export const Game = () => {
         )}
 
         {phase === 'PLAY' && melody && tier && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
+          <div className="tavern-wood-frame w-full rounded-2xl p-3.5 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between text-xs gap-2">
               <span className="font-bold text-[#ffe875]">
                 Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
                 {melody.notes.length}
               </span>
-              {getWardOfGraceCharges(state?.profile.streak ?? 0) > 0 && (
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                    graceRemaining > 0
-                      ? 'bg-sky-900/60 border-sky-400/70 text-sky-200'
-                      : 'bg-black/40 border-white/15 text-[#f5ead2]/50'
-                  }`}
-                >
-                  🛡️ Ward ×{graceRemaining}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {comboStreak >= 3 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/25 border border-amber-300/70 text-[#ffe875]">
+                    🔥 {comboStreak}x
+                  </span>
+                )}
+                {getWardOfGraceCharges(state?.profile.streak ?? 0) > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      graceRemaining > 0
+                        ? 'bg-sky-900/60 border-sky-400/70 text-sky-200'
+                        : 'bg-black/40 border-white/15 text-[#f5ead2]/50'
+                    }`}
+                  >
+                    🛡️ Ward ×{graceRemaining}
+                  </span>
+                )}
+              </div>
               <span className="text-[#f5ead2]/85">
                 Hits: {correctCount}/{playIdx}
               </span>
@@ -797,6 +1016,7 @@ export const Game = () => {
                 feedbackMidi={feedbackMidi}
                 feedbackState={feedbackState}
                 activeTier={tier}
+                disabled={anyModalOpen}
                 onKeyPress={handleKeyPress}
               />
             </div>
@@ -812,7 +1032,7 @@ export const Game = () => {
         )}
 
         {phase === 'RESULTS' && lastResult && tier && finalRoll !== null && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-2.5">
+          <div className="tavern-wood-frame w-full rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-2">
             {lastResult.passed ? (
               <>
                 <div className="w-full flex items-center justify-center gap-3 text-left">
@@ -820,7 +1040,7 @@ export const Game = () => {
                     <img
                       src={nat20SealUrl}
                       alt="Critical Seal"
-                      className="w-12 h-12 rounded-full object-cover border-2 border-[#ffe875] shadow-md shrink-0"
+                      className="w-11 h-11 rounded-full object-cover border-2 border-[#ffe875] shadow-md shrink-0"
                     />
                   ) : (
                     <div className="text-3xl shrink-0">🎶</div>
@@ -836,48 +1056,58 @@ export const Game = () => {
                       <span className="font-bold text-[#ffe875]">
                         +{lastResult.xpEarned} XP
                       </span>
+                      {Boolean(lastResult.encoreBonusXp) && (
+                        <span className="text-[11px] text-amber-200">
+                          {' '}
+                          (incl. +{lastResult.encoreBonusXp} Encore)
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
                 {lastResult.leveledUp && (
-                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1.5 text-xs font-bold text-[#ffe875]">
+                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1 text-xs font-bold text-[#ffe875]">
                     🎉 Level Up! Level {lastResult.profile.level}{' '}
                     {lastResult.profile.title}!
                   </div>
                 )}
                 {lastResult.streakSavedByFreeze && (
-                  <div className="w-full rounded-xl bg-sky-950/70 border border-sky-400/60 px-3 py-1.5 text-xs font-bold text-sky-200">
+                  <div className="w-full rounded-xl bg-sky-950/70 border border-sky-400/60 px-3 py-1 text-xs font-bold text-sky-200">
                     🧊 Streak Freeze saved your {lastResult.profile.streak}-day
                     streak!
                   </div>
                 )}
                 {Boolean(lastResult.bountyCompletedXp) && (
-                  <div className="w-full rounded-xl bg-emerald-950/70 border border-emerald-400/60 px-3 py-1.5 text-xs font-bold text-emerald-200">
+                  <div className="w-full rounded-xl bg-emerald-950/70 border border-emerald-400/60 px-3 py-1 text-xs font-bold text-emerald-200">
                     🎯 Daily Bounty Complete! +{lastResult.bountyCompletedXp}{' '}
                     Bonus XP!
                   </div>
                 )}
-                {lastResult.unlockedFeat &&
-                  (() => {
-                    const meta = FEAT_CATALOG.find(
-                      (f) => f.id === lastResult.unlockedFeat
-                    );
-                    return (
-                      <div className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-1.5 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]">
-                        <span>{meta?.icon ?? '🎖️'}</span>
-                        <span>
-                          Feat Unlocked: {meta?.title ?? lastResult.unlockedFeat}!
-                        </span>
-                      </div>
-                    );
-                  })()}
+                {lastResult.unlockedFeats.length > 0 && (
+                  <div className="w-full flex flex-col gap-1">
+                    {lastResult.unlockedFeats.map((featId) => {
+                      const meta = FEAT_CATALOG.find((f) => f.id === featId);
+                      return (
+                        <div
+                          key={featId}
+                          className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-1 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]"
+                        >
+                          <span>{meta?.icon ?? '🎖️'}</span>
+                          <span>
+                            Feat Unlocked: {meta?.title ?? featId}!
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             ) : (
               <div className="animate-tomato-splat w-full flex items-center justify-center gap-3 text-left">
                 <img
                   src={tomatoSplatUrl}
                   alt="Tomatoes Thrown"
-                  className="w-12 h-12 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
+                  className="w-11 h-11 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
                 />
                 <div className="min-w-0">
                   <h2 className="font-serif text-lg sm:text-xl font-bold text-red-300 leading-tight">
@@ -897,7 +1127,7 @@ export const Game = () => {
               </div>
             )}
 
-            <div className="w-full flex items-center justify-center gap-3 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-2.5 py-1">
+            <div className="w-full flex items-center justify-center gap-2.5 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-2.5 py-1">
               <span>Plays: {lastResult.daily.attemptsCount}</span>
               <span>•</span>
               <span>Clears: {lastResult.daily.clearsCount}</span>
@@ -907,15 +1137,44 @@ export const Game = () => {
               </span>
             </div>
 
+            {/* Community Co-Op Tavern Tip Jar + Live Tavern Pulse */}
+            {tavernStats && (
+              <div className="w-full rounded-lg bg-black/35 border border-[#d4af37]/30 px-2.5 py-1.5 text-[10px] space-y-1">
+                <div className="flex items-center justify-between gap-2 text-[#ffe875]">
+                  <span className="font-bold">
+                    {tavernStats.encoreActive
+                      ? '✨ Tavern Encore Active (+15% XP!)'
+                      : `🍻 Tavern Tip Jar: ${tavernStats.communityXpToday.toLocaleString()} / ${tavernStats.communityGoalXp.toLocaleString()} XP`}
+                  </span>
+                  <span className="text-[#f5ead2]/75 shrink-0">
+                    🎲 {tavernStats.rollersToday} • 🍅{' '}
+                    {tavernStats.tomatoesToday}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-black/55 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      tavernStats.encoreActive
+                        ? 'bg-gradient-to-r from-emerald-400 to-[#ffe875]'
+                        : 'bg-gradient-to-r from-amber-600 to-[#ffe875]'
+                    }`}
+                    style={{ width: `${tipJarPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {state && state.daily.chestsEarned > state.daily.chestsOpened && (
               <button
                 type="button"
                 disabled={openingChest}
                 onClick={() => void handleOpenChest()}
-                className="animate-gold-pulse w-full py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-[#5a3412] via-[#7c4b1a] to-[#5a3412] text-[#ffe875] border-2 border-[#ffe875] shadow-lg cursor-pointer"
+                className={`${
+                  openingChest ? 'animate-chest-shake' : 'animate-gold-pulse'
+                } w-full py-2 px-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-[#5a3412] via-[#7c4b1a] to-[#5a3412] text-[#ffe875] border-2 border-[#ffe875] shadow-lg cursor-pointer`}
               >
                 {openingChest
-                  ? 'Unlocking Chest...'
+                  ? '🗝️ Unlocking Mystery Chest...'
                   : `🎁 Crack Open Mystery Chest! (${state.daily.chestsEarned - state.daily.chestsOpened} ready)`}
               </button>
             )}
@@ -927,29 +1186,51 @@ export const Game = () => {
                 );
                 if (!dropped) return null;
                 return (
-                  <div className="parchment-card w-full rounded-xl p-2.5 flex items-center justify-between gap-2 text-left border-2 border-[#d4af37]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xl shrink-0">{dropped.icon}</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#1c1208] truncate">
-                          {dropped.name} ({dropped.rarity.toUpperCase()})
-                        </p>
-                        <p className="text-[11px] text-[#6e4726]">
-                          {chestReveal.isDuplicate
-                            ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
-                            : chestReveal.pityTriggered
-                              ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
-                              : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowFeats(true)}
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
+                  <div className="w-full space-y-1">
+                    <div
+                      className={`parchment-card w-full rounded-xl p-2 flex items-center justify-between gap-2 text-left border-2 animate-tomato-splat ${RARITY_BORDER[dropped.rarity]}`}
                     >
-                      Vault
-                    </button>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xl shrink-0">{dropped.icon}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#1c1208] truncate">
+                            {dropped.name} ({dropped.rarity.toUpperCase()})
+                          </p>
+                          <p className="text-[11px] text-[#6e4726]">
+                            {chestReveal.isDuplicate
+                              ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
+                              : chestReveal.pityTriggered
+                                ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                                : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openModal('feats')}
+                        className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
+                      >
+                        Vault
+                      </button>
+                    </div>
+                    {chestReveal.leveledUp && (
+                      <div className="w-full rounded-lg bg-amber-500/25 border border-amber-300/70 px-2.5 py-1 text-[11px] font-bold text-[#ffe875]">
+                        🎉 Chest XP Level Up! Level {chestReveal.profile.level}{' '}
+                        {chestReveal.profile.title}!
+                      </div>
+                    )}
+                    {chestReveal.unlockedFeats.map((featId) => {
+                      const meta = FEAT_CATALOG.find((f) => f.id === featId);
+                      return (
+                        <div
+                          key={featId}
+                          className="w-full rounded-lg bg-black/45 border border-[#d4af37]/60 px-2.5 py-1 text-[11px] font-bold text-[#ffe875]"
+                        >
+                          {meta?.icon ?? '🎖️'} Feat Unlocked:{' '}
+                          {meta?.title ?? featId}!
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -960,6 +1241,7 @@ export const Game = () => {
               accuracy={lastResult.accuracy}
               xpEarned={lastResult.xpEarned}
               passed={lastResult.passed}
+              noteResults={lastResult.noteResults ?? noteResults}
               profile={lastResult.profile}
             />
 
@@ -973,7 +1255,7 @@ export const Game = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setShowLeaderboard(true)}
+                onClick={() => openModal('leaderboard')}
                 className="py-2.5 px-3.5 rounded-xl font-semibold text-xs sm:text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer"
               >
                 🏆 Ranks
