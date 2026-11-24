@@ -1,3 +1,5 @@
+import type { BardAvatarConfig } from './cosmetics';
+
 export type RareFeat =
   | 'first_tune'
   | 'flawless'
@@ -47,6 +49,7 @@ export type PlayerProfile = {
   feats: RareFeat[];
   relics: string[];
   selectedVoice: KeyboardVoiceId;
+  bardAvatar: BardAvatarConfig;
   snoovatarUrl?: string | null;
 };
 
@@ -140,6 +143,7 @@ export type LeaderboardEntry = {
   username: string;
   score: number;
   snoovatarUrl?: string | null;
+  bardAvatar?: BardAvatarConfig | null;
 };
 
 export type ShareCommentRequest = {

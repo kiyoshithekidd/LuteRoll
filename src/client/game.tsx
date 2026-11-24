@@ -32,11 +32,16 @@ import {
   xpRequiredForLevel,
 } from '../shared/constants';
 import { generateMelody } from '../shared/melodyGenerator';
+import {
+  getCosmeticForRelic,
+  type BardAvatarConfig,
+} from '../shared/cosmetics';
 import { apiFetch } from './apiClient';
 import streakFlameUrl from './assets/streak-flame.webp';
 import tomatoSplatUrl from './assets/tomato-splat.webp';
 import nat20SealUrl from './assets/nat20-seal.webp';
 import { soundEngine } from './audio/soundEngine';
+import { BardAvatar } from './components/BardAvatar';
 import { FeatsModal } from './components/FeatsModal';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
 import { LeaderboardModal } from './components/LeaderboardModal';
@@ -285,6 +290,20 @@ export const Game = () => {
     }
   };
 
+  const handleDevUnlockAll = async () => {
+    try {
+      clearDemoTimers();
+      const res = await apiFetch('/api/dev-unlock-all', { method: 'POST' });
+      if (!res.ok) return;
+      const fresh = (await res.json()) as StateResponse;
+      setState(fresh);
+      soundEngine.playFanfare();
+      triggerStageEffect('confetti');
+    } catch {
+      // ignore
+    }
+  };
+
   const handleOpenChest = async () => {
     if (openingChest) return;
     setOpeningChest(true);
@@ -304,7 +323,11 @@ export const Game = () => {
       );
       const dropped = RELIC_CATALOG.find((r) => r.id === data.relicId);
       soundEngine.playRarityReveal(dropped?.rarity ?? 'common');
-      if (dropped?.rarity === 'mythic' || dropped?.rarity === 'rare' || data.leveledUp) {
+      if (
+        dropped?.rarity === 'mythic' ||
+        dropped?.rarity === 'rare' ||
+        data.leveledUp
+      ) {
         triggerStageEffect('confetti');
       }
     } finally {
@@ -321,6 +344,17 @@ export const Game = () => {
     if (!res.ok) return;
     const data = (await res.json()) as { profile: PlayerProfile };
     soundEngine.setVoice(data.profile.selectedVoice);
+    setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
+  };
+
+  const handleSaveAvatar = async (bardAvatar: BardAvatarConfig) => {
+    const res = await apiFetch('/api/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bardAvatar }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { profile: PlayerProfile };
     setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
   };
 
@@ -692,14 +726,24 @@ export const Game = () => {
               {muted ? '🔇' : '🔊'}
             </button>
             {state?.isDevSubreddit && (
-              <button
-                type="button"
-                onClick={() => void handleDevReset()}
-                className="text-[11px] px-2 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer whitespace-nowrap"
-                title="Reset today's roll (dev subreddit only)"
-              >
-                ↻<span className="hidden sm:inline"> Reset</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleDevUnlockAll()}
+                  className="text-[11px] px-2 py-1 rounded-lg bg-emerald-950/75 hover:bg-emerald-900/80 border border-emerald-400/50 text-emerald-200 font-semibold cursor-pointer whitespace-nowrap"
+                  title="Unlock all 48 relics, 15 feats, voices & Bard wearables (dev subreddit only)"
+                >
+                  🔓<span className="hidden sm:inline"> All</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDevReset()}
+                  className="text-[11px] px-2 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900/80 border border-amber-400/50 text-amber-200 font-semibold cursor-pointer whitespace-nowrap"
+                  title="Reset today's roll (dev subreddit only)"
+                >
+                  ↻<span className="hidden sm:inline"> Reset</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -707,12 +751,19 @@ export const Game = () => {
         {/* Row 2: Player Identity + Streak */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            {state?.profile.snoovatarUrl && (
-              <img
-                src={state.profile.snoovatarUrl}
-                alt=""
-                className="w-6 h-6 rounded-full object-cover border border-[#d4af37]/70 bg-black/40 shrink-0"
-              />
+            {state && (
+              <button
+                type="button"
+                onClick={() => openModal('feats')}
+                className="cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875]"
+                title="Customize your Bard in the Tavern Vault"
+              >
+                <BardAvatar
+                  config={state.profile.bardAvatar}
+                  snoovatarUrl={state.profile.snoovatarUrl}
+                  size="sm"
+                />
+              </button>
             )}
             <p className="text-xs text-[#f5ead2]/90 truncate">
               {state
@@ -921,16 +972,15 @@ export const Game = () => {
               })}
             </div>
 
-            <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
-              <Keyboard
-                highlightedMidi={highlightedMidi}
-                feedbackMidi={null}
-                feedbackState={null}
-                activeTier={tier}
-                disabled
-                onKeyPress={() => {}}
-              />
-            </div>
+            <Keyboard
+              highlightedMidi={highlightedMidi}
+              feedbackMidi={null}
+              feedbackState={null}
+              activeTier={tier}
+              voiceId={state?.profile.selectedVoice ?? 'grand_piano'}
+              disabled
+              onKeyPress={() => {}}
+            />
 
             <div className="flex gap-2.5">
               <button
@@ -1010,16 +1060,15 @@ export const Game = () => {
               })}
             </div>
 
-            <div className="tavern-felt-bg rounded-xl p-2.5 border border-[#754c28]/80 shadow-inner">
-              <Keyboard
-                highlightedMidi={null}
-                feedbackMidi={feedbackMidi}
-                feedbackState={feedbackState}
-                activeTier={tier}
-                disabled={anyModalOpen}
-                onKeyPress={handleKeyPress}
-              />
-            </div>
+            <Keyboard
+              highlightedMidi={null}
+              feedbackMidi={feedbackMidi}
+              feedbackState={feedbackState}
+              activeTier={tier}
+              voiceId={state?.profile.selectedVoice ?? 'grand_piano'}
+              disabled={anyModalOpen}
+              onKeyPress={handleKeyPress}
+            />
 
             <button
               type="button"
@@ -1185,6 +1234,9 @@ export const Game = () => {
                   (r) => r.id === chestReveal.relicId
                 );
                 if (!dropped) return null;
+                const unlockedWearable = !chestReveal.isDuplicate
+                  ? getCosmeticForRelic(dropped.id)
+                  : undefined;
                 return (
                   <div className="w-full space-y-1">
                     <div
@@ -1203,6 +1255,11 @@ export const Game = () => {
                                 ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
                                 : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
                           </p>
+                          {unlockedWearable && (
+                            <p className="text-[10px] font-bold text-[#103524] truncate">
+                              🎭 Bard Wearable Unlocked: {unlockedWearable.name}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <button
@@ -1210,7 +1267,7 @@ export const Game = () => {
                         onClick={() => openModal('feats')}
                         className="text-[11px] font-bold px-2 py-1 rounded-lg bg-[#2c1b0e] text-[#ffe875] shrink-0 cursor-pointer"
                       >
-                        Vault
+                        Equip
                       </button>
                     </div>
                     {chestReveal.leveledUp && (
@@ -1276,6 +1333,7 @@ export const Game = () => {
         <FeatsModal
           profile={state.profile}
           onSelectVoice={handleSelectVoice}
+          onSaveAvatar={handleSaveAvatar}
           onClose={() => setShowFeats(false)}
         />
       )}

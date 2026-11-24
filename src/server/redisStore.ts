@@ -6,6 +6,7 @@ import {
   DUPE_PITY_THRESHOLD,
   ENCORE_XP_BONUS_RATE,
   FAIL_ACCURACY_THRESHOLD,
+  FEAT_CATALOG,
   getDailyBounty,
   getIsoWeekKey,
   getLevelFromXp,
@@ -13,7 +14,12 @@ import {
   getTitleForLevel,
   KEYBOARD_VOICES,
   RELIC_CATALOG,
+  xpRequiredForLevel,
 } from '../shared/constants';
+import {
+  sanitizeBardAvatarConfig,
+  type BardAvatarConfig,
+} from '../shared/cosmetics';
 import { cyrb128 } from '../shared/prng';
 import type {
   DailyState,
@@ -156,6 +162,15 @@ export async function getPlayerProfile(
       ? rawVoice
       : 'grand_piano';
   const resolvedAvatar = snoovatarUrl ?? (data.snoovatarUrl || null);
+  let parsedBard: Partial<BardAvatarConfig> | null = null;
+  if (data.bardAvatar) {
+    try {
+      parsedBard = JSON.parse(data.bardAvatar) as Partial<BardAvatarConfig>;
+    } catch {
+      parsedBard = null;
+    }
+  }
+  const bardAvatar = sanitizeBardAvatarConfig(parsedBard, relics, feats);
 
   return {
     username,
@@ -170,6 +185,7 @@ export async function getPlayerProfile(
     feats,
     relics,
     selectedVoice,
+    bardAvatar,
     snoovatarUrl: resolvedAvatar,
   };
 }
@@ -513,6 +529,12 @@ export async function submitAttempt(
     updates.push(redis.hSet('lb:snoovatars', { [username]: resolvedAvatar }));
   }
 
+  if (!isAnonymous) {
+    updates.push(
+      redis.hSet('lb:bards', { [username]: JSON.stringify(profile.bardAvatar) })
+    );
+  }
+
   if (!isAnonymous && xpEarned > 0) {
     updates.push(
       redis.zAdd('lb:xp:alltime', { member: username, score: newTotalXp }),
@@ -554,6 +576,7 @@ export async function submitAttempt(
       feats: nextFeats,
       relics: profile.relics,
       selectedVoice: profile.selectedVoice,
+      bardAvatar: profile.bardAvatar,
       snoovatarUrl: resolvedAvatar,
     },
     daily: {
@@ -618,18 +641,37 @@ async function fetchSingleBoard(
     isAnonymous ? Promise.resolve(undefined) : redis.zScore(zsetKey, username),
   ]);
 
-  const avatars = await Promise.all(
-    rawTop.map((entry) =>
-      redis.hGet('lb:snoovatars', entry.member).catch(() => undefined)
-    )
-  );
+  const [avatars, bardRaws] = await Promise.all([
+    Promise.all(
+      rawTop.map((entry) =>
+        redis.hGet('lb:snoovatars', entry.member).catch(() => undefined)
+      )
+    ),
+    Promise.all(
+      rawTop.map((entry) =>
+        redis.hGet('lb:bards', entry.member).catch(() => undefined)
+      )
+    ),
+  ]);
 
-  const top: LeaderboardEntry[] = rawTop.map((entry, idx) => ({
-    rank: idx + 1,
-    username: entry.member,
-    score: entry.score,
-    snoovatarUrl: avatars[idx] || null,
-  }));
+  const top: LeaderboardEntry[] = rawTop.map((entry, idx) => {
+    let bardAvatar: BardAvatarConfig | null = null;
+    const rawBard = bardRaws[idx];
+    if (rawBard) {
+      try {
+        bardAvatar = JSON.parse(rawBard) as BardAvatarConfig;
+      } catch {
+        bardAvatar = null;
+      }
+    }
+    return {
+      rank: idx + 1,
+      username: entry.member,
+      score: entry.score,
+      snoovatarUrl: avatars[idx] || null,
+      bardAvatar,
+    };
+  });
 
   const myRank =
     ascRank !== undefined && ascRank !== null
@@ -885,4 +927,80 @@ export async function getYesterdayRecap(yesterdayUtc: string): Promise<{
     tomatoesCount: stats.tomatoesToday,
     communityXp: stats.communityXpToday,
   };
+}
+
+export async function saveBardAvatar(
+  playerKey: string,
+  username: string,
+  isAnonymous: boolean,
+  rawConfig: Partial<BardAvatarConfig>,
+  snoovatarUrl?: string | null
+): Promise<PlayerProfile> {
+  const profile = await getPlayerProfile(
+    playerKey,
+    username,
+    isAnonymous,
+    snoovatarUrl
+  );
+  const sanitized = sanitizeBardAvatarConfig(
+    rawConfig,
+    profile.relics,
+    profile.feats
+  );
+  const serialized = JSON.stringify(sanitized);
+
+  const updates: Promise<unknown>[] = [
+    redis.hSet(profileKey(playerKey), { bardAvatar: serialized }),
+  ];
+  if (!isAnonymous) {
+    updates.push(redis.hSet('lb:bards', { [username]: serialized }));
+  }
+  await Promise.all(updates);
+
+  return {
+    ...profile,
+    bardAvatar: sanitized,
+  };
+}
+
+/**
+ * Dev-only helper (invoked strictly on r/lute_roll_dev) to unlock all 48 relics,
+ * all 15 feats, all 13 voices/skins, Level 25, 10-day streak, and 2 ready chests.
+ */
+export async function devUnlockAll(
+  playerKey: string,
+  username: string,
+  isAnonymous: boolean,
+  snoovatarUrl?: string | null
+): Promise<{ profile: PlayerProfile; daily: DailyState }> {
+  const utcDate = getUtcDateKey();
+  const allRelics = RELIC_CATALOG.map((r) => r.id);
+  const allFeats = FEAT_CATALOG.map((f) => f.id);
+  const targetXp = xpRequiredForLevel(25);
+  const targetLevel = 25;
+  const targetTitle = getTitleForLevel(targetLevel);
+
+  await Promise.all([
+    redis.hSet(profileKey(playerKey), {
+      username,
+      xp: String(targetXp),
+      level: String(targetLevel),
+      title: targetTitle,
+      streak: '10',
+      streakFreezes: '1',
+      relics: JSON.stringify(allRelics),
+      feats: JSON.stringify(allFeats),
+    }),
+    redis.hSet(dailyKey(playerKey, utcDate), {
+      chestsEarned: '2',
+      chestsOpened: '0',
+    }),
+  ]);
+
+  const [profile, daily] = await Promise.all([
+    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
+    getDailyState(playerKey, utcDate),
+  ]);
+
+  return { profile, daily };
 }

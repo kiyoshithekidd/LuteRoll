@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LeaderboardResponse } from '../../shared/api';
 import { apiFetch } from '../apiClient';
+import { BardAvatar } from './BardAvatar';
 
 type LeaderboardModalProps = {
   onClose: () => void;
@@ -131,13 +132,11 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
                             ? '🥉'
                             : `#${entry.rank}`}
                     </span>
-                    {entry.snoovatarUrl && (
-                      <img
-                        src={entry.snoovatarUrl}
-                        alt=""
-                        className="w-5 h-5 rounded-full object-cover border border-[#9c7538]/50 shrink-0 bg-[#2c1b0e]"
-                      />
-                    )}
+                    <BardAvatar
+                      config={entry.bardAvatar}
+                      snoovatarUrl={entry.snoovatarUrl}
+                      size="xs"
+                    />
                     <span className="font-semibold truncate text-[#1c1208]">
                       u/{entry.username}
                     </span>

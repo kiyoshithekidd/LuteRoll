@@ -1,5 +1,10 @@
 import { useEffect } from 'react';
+import type { KeyboardVoiceId } from '../../shared/api';
 import type { DifficultyTier } from '../../shared/constants';
+import {
+  KEYBOARD_SKIN_THEMES,
+  type KeyboardSkinTheme,
+} from '../../shared/cosmetics';
 import { midiToNoteName } from '../../shared/melodyGenerator';
 
 export type KeyFeedbackState = 'playback' | 'correct' | 'wrong' | null;
@@ -9,6 +14,7 @@ type KeyboardProps = {
   feedbackMidi: number | null;
   feedbackState: KeyFeedbackState;
   activeTier?: DifficultyTier | null;
+  voiceId?: KeyboardVoiceId;
   disabled?: boolean;
   onKeyPress: (midi: number) => void;
 };
@@ -22,38 +28,36 @@ type KeyDef = {
 };
 
 /**
- * Full 2-octave desktop keybindings (fixes B6):
+ * Full 2-octave desktop keybindings:
  * Lower octave (C4–B4): Z X C V B N M (white) + S D G H J (sharps)
  * Upper octave (C5–C6): Q W E R T Y U I (white) + 2 3 5 6 7 (sharps)
  */
 const DESKTOP_KEY_MAP: Record<string, number> = {
-  // Lower octave C4..B4
-  z: 60, // C4
-  s: 61, // C#4
-  x: 62, // D4
-  d: 63, // D#4
-  c: 64, // E4
-  v: 65, // F4
-  g: 66, // F#4
-  b: 67, // G4
-  h: 68, // G#4
-  n: 69, // A4
-  j: 70, // A#4
-  m: 71, // B4
-  // Upper octave C5..C6
-  q: 72, // C5
-  '2': 73, // C#5
-  w: 74, // D5
-  '3': 75, // D#5
-  e: 76, // E5
-  r: 77, // F5
-  '5': 78, // F#5
-  t: 79, // G5
-  '6': 80, // G#5
-  y: 81, // A5
-  '7': 82, // A#5
-  u: 83, // B5
-  i: 84, // C6
+  z: 60,
+  s: 61,
+  x: 62,
+  d: 63,
+  c: 64,
+  v: 65,
+  g: 66,
+  b: 67,
+  h: 68,
+  n: 69,
+  j: 70,
+  m: 71,
+  q: 72,
+  '2': 73,
+  w: 74,
+  '3': 75,
+  e: 76,
+  r: 77,
+  '5': 78,
+  t: 79,
+  '6': 80,
+  y: 81,
+  '7': 82,
+  u: 83,
+  i: 84,
 };
 
 const MIDI_TO_HINT: Record<number, string> = Object.fromEntries(
@@ -119,6 +123,7 @@ function OctaveRow({
   feedbackMidi,
   feedbackState,
   activeTier = null,
+  skin,
   disabled = false,
   onKeyPress,
 }: {
@@ -128,6 +133,7 @@ function OctaveRow({
   feedbackMidi: number | null;
   feedbackState: KeyFeedbackState;
   activeTier?: DifficultyTier | null;
+  skin: KeyboardSkinTheme;
   disabled?: boolean;
   onKeyPress: (midi: number) => void;
 }) {
@@ -169,8 +175,8 @@ function OctaveRow({
     const dimClass = inRange ? '' : 'opacity-40';
 
     return isBlack
-      ? `bg-gradient-to-b from-[#2b211a] to-[#120c07] border-[#4a3525] text-[#f5ead2]/75 active:bg-[#4a3525] ${dimClass}`
-      : `bg-gradient-to-b from-[#fffdf7] to-[#ede2ca] border-[#bfa87e] text-[#3a2312] active:bg-[#d4af37]/30 ${dimClass}`;
+      ? `${skin.blackKeyClass} ${dimClass}`
+      : `${skin.whiteKeyClass} ${dimClass}`;
   };
 
   return (
@@ -261,9 +267,13 @@ export function Keyboard({
   feedbackMidi,
   feedbackState,
   activeTier = null,
+  voiceId = 'grand_piano',
   disabled = false,
   onKeyPress,
 }: KeyboardProps) {
+  const skin =
+    KEYBOARD_SKIN_THEMES[voiceId] ?? KEYBOARD_SKIN_THEMES.grand_piano;
+
   useEffect(() => {
     if (disabled) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -279,12 +289,16 @@ export function Keyboard({
   }, [disabled, onKeyPress]);
 
   return (
-    <div className="w-full flex flex-col gap-2">
-      <div className="flex flex-col gap-2">
+    <div
+      className={`w-full rounded-xl p-2.5 border shadow-inner transition-colors duration-300 ${skin.trayClass}`}
+    >
+      <div className="w-full flex flex-col gap-2">
         <div className="space-y-0.5">
-          <div className="flex justify-between text-[10px] uppercase tracking-wider text-[#d4af37]/75 px-1">
+          <div
+            className={`flex justify-between text-[10px] uppercase tracking-wider px-1 ${skin.headerClass}`}
+          >
             <span>Upper Octave (C5–C6)</span>
-            <span className="hidden sm:inline opacity-70">Q–I / 2–7</span>
+            <span className="hidden sm:inline opacity-75">Q–I / 2–7</span>
           </div>
           <OctaveRow
             baseMidi={72}
@@ -293,14 +307,17 @@ export function Keyboard({
             feedbackMidi={feedbackMidi}
             feedbackState={feedbackState}
             activeTier={activeTier}
+            skin={skin}
             disabled={disabled}
             onKeyPress={onKeyPress}
           />
         </div>
         <div className="space-y-0.5">
-          <div className="flex justify-between text-[10px] uppercase tracking-wider text-[#d4af37]/75 px-1">
+          <div
+            className={`flex justify-between text-[10px] uppercase tracking-wider px-1 ${skin.headerClass}`}
+          >
             <span>Lower Octave (C4–B4)</span>
-            <span className="hidden sm:inline opacity-70">Z–M / S D G H J</span>
+            <span className="hidden sm:inline opacity-75">Z–M / S D G H J</span>
           </div>
           <OctaveRow
             baseMidi={60}
@@ -308,6 +325,7 @@ export function Keyboard({
             feedbackMidi={feedbackMidi}
             feedbackState={feedbackState}
             activeTier={activeTier}
+            skin={skin}
             disabled={disabled}
             onKeyPress={onKeyPress}
           />

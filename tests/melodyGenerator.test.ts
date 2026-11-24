@@ -15,6 +15,14 @@ import {
 } from '../src/shared/resultCard';
 import { formatBardFlairText } from '../src/server/flairService';
 import type { PlayerProfile } from '../src/shared/api';
+import {
+  DEFAULT_BARD_AVATAR,
+  getCosmeticForFeat,
+  getCosmeticForRelic,
+  KEYBOARD_SKIN_THEMES,
+  sanitizeBardAvatarConfig,
+} from '../src/shared/cosmetics';
+import { FEAT_CATALOG, RELIC_CATALOG } from '../src/shared/constants';
 
 function isWhiteKey(midi: number): boolean {
   const pc = midi % 12;
@@ -184,11 +192,58 @@ describe('formatBardFlairText (B8 badge priority)', () => {
     feats: ['nat20', 'streak30'],
     relics: [],
     selectedVoice: 'grand_piano',
+    bardAvatar: DEFAULT_BARD_AVATAR,
   };
 
   it('prioritizes 30-day streak trophy over Nat 20 dice badge', () => {
     const flair = formatBardFlairText(baseProfile);
     assert.ok(flair.endsWith('🏆'), `Expected 🏆 badge, got "${flair}"`);
     assert.ok(flair.length <= 64);
+  });
+});
+
+describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
+  it('maps every single voice to an instrument-matched keyboard skin', () => {
+    for (const voice of KEYBOARD_VOICES) {
+      const skin = KEYBOARD_SKIN_THEMES[voice.id];
+      assert.ok(skin, `Missing keyboard skin theme for voice ${voice.id}`);
+      assert.equal(skin.id, voice.id);
+    }
+  });
+
+  it('maps all 48 relics 1-to-1 to a Bard wearable', () => {
+    assert.equal(RELIC_CATALOG.length, 48);
+    for (const relic of RELIC_CATALOG) {
+      const item = getCosmeticForRelic(relic.id);
+      assert.ok(item, `Relic ${relic.id} (${relic.name}) has no mapped wearable`);
+    }
+  });
+
+  it('maps all 15 feats 1-to-1 to a Bard wearable', () => {
+    assert.equal(FEAT_CATALOG.length, 15);
+    for (const feat of FEAT_CATALOG) {
+      const item = getCosmeticForFeat(feat.id);
+      assert.ok(item, `Feat ${feat.id} (${feat.title}) has no mapped wearable`);
+    }
+  });
+
+  it('enforces relic and feat unlock rules during avatar sanitization', () => {
+    const lockedAttempt = sanitizeBardAvatarConfig(
+      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
+      [],
+      []
+    );
+    assert.equal(lockedAttempt.hat, DEFAULT_BARD_AVATAR.hat);
+    assert.equal(lockedAttempt.cloak, DEFAULT_BARD_AVATAR.cloak);
+    assert.equal(lockedAttempt.frame, DEFAULT_BARD_AVATAR.frame);
+
+    const unlockedAttempt = sanitizeBardAvatarConfig(
+      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
+      ['grand_crown'],
+      ['level25', 'nat20']
+    );
+    assert.equal(unlockedAttempt.hat, 'crown_of_keys');
+    assert.equal(unlockedAttempt.cloak, 'virtuoso_cape');
+    assert.equal(unlockedAttempt.frame, 'nat20_crit_aura');
   });
 });

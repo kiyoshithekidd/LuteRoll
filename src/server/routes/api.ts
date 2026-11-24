@@ -14,6 +14,7 @@ import { formatResultCardText } from '../../shared/resultCard';
 import {
   claimShareCommentSlot,
   commitRoll,
+  devUnlockAll,
   getDailyState,
   getLastRunForShare,
   getLeaderboards,
@@ -21,9 +22,11 @@ import {
   getTavernStats,
   openMysteryChest,
   resetDailyState,
+  saveBardAvatar,
   selectKeyboardVoice,
   submitAttempt,
 } from '../redisStore';
+import type { BardAvatarConfig } from '../../shared/cosmetics';
 import { syncBardUserFlair } from '../flairService';
 
 export const api = new Hono();
@@ -320,6 +323,44 @@ api.post('/dev-reset', async (c) => {
   });
 });
 
+api.post('/dev-unlock-all', async (c) => {
+  if (context.subredditName !== 'lute_roll_dev') {
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: 'Dev unlock is only allowed on r/lute_roll_dev',
+      },
+      403
+    );
+  }
+
+  const { postId } = context;
+  if (!postId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'postId is required' },
+      400
+    );
+  }
+
+  const player = await resolvePlayer(c);
+  const { profile, daily } = await devUnlockAll(
+    player.playerKey,
+    player.username,
+    player.isAnonymous,
+    player.snoovatarUrl
+  );
+  const tavernStats = await getTavernStats();
+
+  return c.json<StateResponse>({
+    type: 'state',
+    postId,
+    isDevSubreddit: true,
+    profile,
+    daily,
+    tavernStats,
+  });
+});
+
 api.post('/open-chest', async (c) => {
   try {
     const player = await resolvePlayer(c);
@@ -363,6 +404,33 @@ api.post('/voice', async (c) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Could not select voice';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/avatar', async (c) => {
+  try {
+    const body = (await c.req.json()) as {
+      bardAvatar?: Partial<BardAvatarConfig>;
+    };
+    if (!body.bardAvatar || typeof body.bardAvatar !== 'object') {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Missing bardAvatar config' },
+        400
+      );
+    }
+    const player = await resolvePlayer(c);
+    const profile = await saveBardAvatar(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      body.bardAvatar,
+      player.snoovatarUrl
+    );
+    return c.json({ ok: true, profile });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not save bard avatar';
     return c.json<ErrorResponse>({ status: 'error', message }, 400);
   }
 });

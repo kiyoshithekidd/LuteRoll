@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { UiResponse } from '@devvit/web/shared';
 import { context, reddit } from '@devvit/web/server';
 import { createPost } from '../core/post';
-import { resetDailyState } from '../redisStore';
+import { devUnlockAll, resetDailyState } from '../redisStore';
 
 export const menu = new Hono();
 
@@ -55,6 +55,36 @@ menu.post('/reset-daily', async (c) => {
   return c.json<UiResponse>(
     {
       showToast: 'Daily roll reset! Reopen or refresh the post to roll again.',
+    },
+    200
+  );
+});
+
+menu.post('/unlock-all', async (c) => {
+  if (context.subredditName !== 'lute_roll_dev') {
+    return c.json<UiResponse>(
+      {
+        showToast: 'Dev unlock is only enabled on r/lute_roll_dev.',
+      },
+      403
+    );
+  }
+
+  const username = await reddit.getCurrentUsername();
+  if (!username) {
+    return c.json<UiResponse>(
+      {
+        showToast: 'Sign in required to unlock all dev items.',
+      },
+      401
+    );
+  }
+
+  await devUnlockAll(`u:${username}`, username, false);
+  return c.json<UiResponse>(
+    {
+      showToast:
+        'Unlocked all 48 relics, 15 feats, 13 voices/skins, & Bard wearables on r/lute_roll_dev!',
     },
     200
   );

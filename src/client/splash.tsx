@@ -10,6 +10,7 @@ import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
 import { TavernGuideModal } from './components/TavernGuideModal';
+import { BardAvatar } from './components/BardAvatar';
 import { trackAppReady } from './telemetry';
 
 function getUtcResetCountdown(): string {
@@ -109,16 +110,23 @@ export const Splash = () => {
           <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-[#ffe875] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
             Lute Roll
           </h1>
-          <p className="text-xs sm:text-sm text-[#f5ead2]/90">
+          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-[#f5ead2]/90">
             {state ? (
               <>
-                <span className="font-semibold text-white">{username}</span> •
-                Lvl {state.profile.level} {state.profile.title}
+                <BardAvatar
+                  config={state.profile.bardAvatar}
+                  snoovatarUrl={state.profile.snoovatarUrl}
+                  size="xs"
+                />
+                <span>
+                  <span className="font-semibold text-white">{username}</span> •
+                  Lvl {state.profile.level} {state.profile.title}
+                </span>
               </>
             ) : (
-              'Roll a d20, learn the tune, earn the XP.'
+              <span>Roll a d20, learn the tune, earn the XP.</span>
             )}
-          </p>
+          </div>
           {/* Issue #7: Live tavern stat — hidden cleanly if 0 or unavailable */}
           {rollersToday > 0 && (
             <p className="text-[11px] font-semibold text-[#ffe875]/90 pt-0.5">
