@@ -2,7 +2,63 @@ import type { KeyboardVoiceId, RareFeat } from './api';
 
 export type BardCosmeticSlot = 'hat' | 'cloak' | 'prop' | 'frame';
 
+export type BardPortraitId =
+  | 'busker'
+  | 'minstrel'
+  | 'baroque'
+  | 'clockwork'
+  | 'arcane'
+  | 'dragon'
+  | 'celesta'
+  | 'astral'
+  | 'nat20'
+  | 'flawless'
+  | 'brutal';
+
+export type BardPortraitMeta = {
+  id: BardPortraitId;
+  name: string;
+  subtitle: string;
+  unlockRelics?: number;
+  unlockRelicId?: string;
+  unlockFeatId?: RareFeat;
+};
+
+export const BARD_PORTRAITS: readonly BardPortraitMeta[] = [
+  { id: 'busker', name: 'Tavern Busker', subtitle: 'Starter • Feathered Cap & Lute', unlockRelics: 0 },
+  { id: 'minstrel', name: 'Hooded Minstrel', subtitle: 'Starter • Candlelit Quill & Scroll', unlockRelics: 0 },
+  { id: 'baroque', name: 'Baroque Noble', subtitle: '3 Relics or Velvet Bench Pad', unlockRelics: 3, unlockRelicId: 'velvet_bench' },
+  { id: 'clockwork', name: 'Clockwork Tinker', subtitle: '6 Relics or Clockwork Arpeggiator', unlockRelics: 6, unlockRelicId: 'clock_arp' },
+  { id: 'arcane', name: 'Arcane Rune-Weaver', subtitle: '12 Relics or Runic Diapason', unlockRelics: 12, unlockRelicId: 'runic_diapason' },
+  { id: 'dragon', name: 'Dragoncrest Troubadour', subtitle: '18 Relics or Dragonbone Hammer', unlockRelics: 18, unlockRelicId: 'dragon_hammer' },
+  { id: 'celesta', name: 'Starlight Celesta', subtitle: '25 Relics or Crystal Organ Pipe', unlockRelics: 25, unlockRelicId: 'crystal_pipe' },
+  { id: 'astral', name: 'Astral Sovereign', subtitle: 'Mythic Relic or Crown of the Keys', unlockRelicId: 'grand_crown', unlockFeatId: 'mythic_relic' },
+  { id: 'nat20', name: 'Nat 20 Champion', subtitle: 'Feat: Blessed by Fate (Nat 20)', unlockFeatId: 'nat20' },
+  { id: 'flawless', name: 'Golden Ear Virtuoso', subtitle: 'Feat: Golden Ear (100% Clear)', unlockFeatId: 'flawless' },
+  { id: 'brutal', name: 'Brutal Underdog', subtitle: 'Feat: Underdog Encore (Nat 1 Clear)', unlockFeatId: 'nat1_clear' },
+] as const;
+
+export function isPortraitUnlocked(
+  portrait: BardPortraitMeta,
+  ownedRelics: readonly string[],
+  ownedFeats: readonly RareFeat[]
+): boolean {
+  if (portrait.unlockRelics === 0) return true;
+  if (portrait.unlockRelics !== undefined && ownedRelics.length >= portrait.unlockRelics) {
+    return true;
+  }
+  if (portrait.unlockRelicId && ownedRelics.includes(portrait.unlockRelicId)) {
+    return true;
+  }
+  if (portrait.unlockFeatId && ownedFeats.includes(portrait.unlockFeatId)) {
+    return true;
+  }
+  return false;
+}
+
 export type BardAvatarConfig = {
+  portrait?: BardPortraitId;
+  badgeId?: string | null;
   hat: string;
   cloak: string;
   prop: string;
@@ -40,6 +96,8 @@ export const BARD_SKIN_TONES: readonly SkinToneMeta[] = [
 ] as const;
 
 export const DEFAULT_BARD_AVATAR: BardAvatarConfig = {
+  portrait: 'busker',
+  badgeId: null,
   hat: 'feathered_cap',
   cloak: 'forest_green',
   prop: 'wooden_lute',
@@ -180,11 +238,39 @@ export function sanitizeBardAvatarConfig(
     return DEFAULT_BARD_AVATAR[slot];
   };
 
+  let portrait: BardPortraitId = 'busker';
+  if (input?.portrait) {
+    const foundPortrait = BARD_PORTRAITS.find((p) => p.id === input.portrait);
+    if (
+      foundPortrait &&
+      isPortraitUnlocked(foundPortrait, ownedRelics, ownedFeats)
+    ) {
+      portrait = foundPortrait.id;
+    }
+  }
+
+  let badgeId: string | null = null;
+  if (typeof input?.badgeId === 'string') {
+    if (
+      input.badgeId.startsWith('relic:') &&
+      ownedRelics.includes(input.badgeId.slice(6))
+    ) {
+      badgeId = input.badgeId;
+    } else if (
+      input.badgeId.startsWith('feat:') &&
+      ownedFeats.includes(input.badgeId.slice(5) as RareFeat)
+    ) {
+      badgeId = input.badgeId;
+    }
+  }
+
   const validSkin = BARD_SKIN_TONES.some((s) => s.id === input?.skinTone)
     ? (input!.skinTone as string)
     : DEFAULT_BARD_AVATAR.skinTone;
 
   return {
+    portrait,
+    badgeId,
     hat: pickValid('hat', input?.hat),
     cloak: pickValid('cloak', input?.cloak),
     prop: pickValid('prop', input?.prop),

@@ -8,17 +8,18 @@ import {
 } from '../../shared/constants';
 import {
   BARD_COSMETICS,
-  BARD_SKIN_TONES,
+  BARD_PORTRAITS,
   getCosmeticForFeat,
   getCosmeticForRelic,
   isCosmeticUnlocked,
+  isPortraitUnlocked,
   KEYBOARD_SKIN_THEMES,
   type BardAvatarConfig,
-  type BardCosmeticSlot,
 } from '../../shared/cosmetics';
 import { soundEngine } from '../audio/soundEngine';
 import bountySealUrl from '../assets/bounty-seal.webp';
 import nat20SealUrl from '../assets/nat20-seal.webp';
+import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
 import { BardAvatar } from './BardAvatar';
 
 type FeatsModalProps = {
@@ -29,7 +30,7 @@ type FeatsModalProps = {
 };
 
 type VaultTab = 'relics' | 'voices' | 'bard' | 'feats';
-type BardCategory = BardCosmeticSlot | 'tone';
+type BardCategory = 'portrait' | 'frame' | 'badge';
 
 const RARITY_STYLES: Record<
   'common' | 'uncommon' | 'rare' | 'mythic',
@@ -41,13 +42,6 @@ const RARITY_STYLES: Record<
   mythic: 'bg-amber-900 text-amber-200 border-amber-400/70',
 };
 
-const SLOT_LABELS: Record<BardCosmeticSlot, string> = {
-  hat: 'Hat',
-  cloak: 'Cloak',
-  prop: 'Prop',
-  frame: 'Aura',
-};
-
 export function FeatsModal({
   profile,
   onSelectVoice,
@@ -55,7 +49,7 @@ export function FeatsModal({
   onClose,
 }: FeatsModalProps) {
   const [tab, setTab] = useState<VaultTab>('bard');
-  const [bardCat, setBardCat] = useState<BardCategory>('hat');
+  const [bardCat, setBardCat] = useState<BardCategory>('portrait');
   const [savingVoice, setSavingVoice] = useState<KeyboardVoiceId | null>(null);
   const [savingAvatar, setSavingAvatar] = useState(false);
   const previewTimersRef = useRef<number[]>([]);
@@ -114,24 +108,11 @@ export function FeatsModal({
     }
   };
 
-  const getUnlockHint = (
-    relicId: string | null,
-    featId?: RareFeat | null
-  ): string => {
-    if (relicId) {
-      const r = RELIC_CATALOG.find((x) => x.id === relicId);
-      return r ? `Relic: ${r.name}` : 'Mystery Chest Relic';
-    }
-    if (featId) {
-      const f = FEAT_CATALOG.find((x) => x.id === featId);
-      return f ? `Feat: ${f.title}` : 'Rare Feat';
-    }
-    return 'Starter';
-  };
-
-  const unlockedWearablesCount = BARD_COSMETICS.filter((c) =>
-    isCosmeticUnlocked(c, profile.relics, profile.feats)
+  const unlockedPortraitsCount = BARD_PORTRAITS.filter((p) =>
+    isPortraitUnlocked(p, profile.relics, profile.feats)
   ).length;
+
+  const frameCosmetics = BARD_COSMETICS.filter((c) => c.slot === 'frame');
 
   return (
     <div
@@ -213,7 +194,7 @@ export function FeatsModal({
         <div className="overflow-y-auto space-y-2.5 pr-0.5 flex-1">
           {tab === 'bard' && (
             <>
-              {/* Live Bard Preview */}
+              {/* Live Illustrated Bard Preview */}
               <div className="parchment-card rounded-xl p-3 flex items-center gap-3">
                 <BardAvatar
                   config={profile.bardAvatar}
@@ -225,11 +206,11 @@ export function FeatsModal({
                     {profile.username}
                   </p>
                   <p className="text-[11px] text-[#6e4726]">
-                    Shown in HUD &amp; Community Leaderboards •{' '}
+                    Shown in HUD &amp; Leaderboards •{' '}
                     <strong>
-                      {unlockedWearablesCount}/{BARD_COSMETICS.length}
+                      {unlockedPortraitsCount}/{BARD_PORTRAITS.length}
                     </strong>{' '}
-                    unlocked
+                    Bards unlocked
                   </p>
                   {profile.snoovatarUrl && (
                     <button
@@ -243,29 +224,27 @@ export function FeatsModal({
                       className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#2c1b0e] text-[#ffe875] border border-[#9c7538] cursor-pointer"
                     >
                       {profile.bardAvatar.useSnoovatar
-                        ? '🎭 Switch to Custom Bard'
+                        ? '🎭 Switch to Chibi Bard'
                         : '👤 Use Reddit Snoovatar'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Category Pills */}
-              <div className="grid grid-cols-5 gap-1">
+              {/* 3 Clean Category Pills */}
+              <div className="grid grid-cols-3 gap-1.5">
                 {(
                   [
-                    ['hat', '🎩 Hat'],
-                    ['cloak', '🧥 Cloak'],
-                    ['prop', '🪕 Prop'],
-                    ['frame', '✨ Aura'],
-                    ['tone', '🎨 Tone'],
+                    ['portrait', '🎭 Bards (11)'],
+                    ['frame', '✨ Aura Rings'],
+                    ['badge', '📌 Crest Pin'],
                   ] as const
                 ).map(([cat, label]) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setBardCat(cat)}
-                    className={`py-1 px-1 rounded-lg text-[10px] font-bold cursor-pointer ${
+                    className={`py-1.5 px-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold cursor-pointer ${
                       bardCat === cat
                         ? 'bg-[#103524] text-[#ffe875] border border-[#ffe875]'
                         : 'bg-black/35 text-[#f5ead2]/75 border border-[#d4af37]/25'
@@ -276,118 +255,226 @@ export function FeatsModal({
                 ))}
               </div>
 
-              {/* Category Items */}
-              {bardCat === 'tone' ? (
-                <div className="grid grid-cols-5 gap-2">
-                  {BARD_SKIN_TONES.map((tone) => {
-                    const active = profile.bardAvatar.skinTone === tone.id;
+              {/* Illustrated Chibi Bard Portrait Grid */}
+              {bardCat === 'portrait' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {BARD_PORTRAITS.map((p) => {
+                    const unlocked = isPortraitUnlocked(
+                      p,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped =
+                      !profile.bardAvatar.useSnoovatar &&
+                      (profile.bardAvatar.portrait ?? 'busker') === p.id;
                     return (
                       <button
-                        key={tone.id}
+                        key={p.id}
                         type="button"
-                        disabled={savingAvatar}
+                        disabled={!unlocked || savingAvatar}
                         onClick={() =>
                           void handleUpdateAvatar({
-                            skinTone: tone.id,
+                            portrait: p.id,
                             useSnoovatar: false,
                           })
                         }
-                        className={`rounded-xl p-2 flex flex-col items-center gap-1 border cursor-pointer ${
-                          active
-                            ? 'parchment-card border-[#ffe875]'
-                            : 'bg-black/40 border-[#d4af37]/25 text-[#f5ead2]'
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-all ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875] shadow-[0_0_12px_rgba(255,232,117,0.4)]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer hover:brightness-105'
+                              : 'bg-black/45 border-[#d4af37]/20 opacity-65 cursor-not-allowed'
                         }`}
                       >
-                        <span
-                          className="w-7 h-7 rounded-full border border-black/30"
-                          style={{ backgroundColor: tone.fill }}
-                        />
-                        <span className="text-[9px] font-bold truncate w-full text-center">
-                          {tone.name.split(' ').pop()}
-                        </span>
+                        <div className="relative shrink-0">
+                          <img
+                            src={BARD_PORTRAIT_URLS[p.id]}
+                            alt={p.name}
+                            className={`w-12 h-12 rounded-full object-cover border border-[#d4af37] ${
+                              unlocked ? '' : 'grayscale brightness-50'
+                            }`}
+                          />
+                          {!unlocked && (
+                            <span className="absolute inset-0 flex items-center justify-center text-sm">
+                              🔒
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold leading-tight truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/80'
+                            }`}
+                          >
+                            {p.name}
+                          </p>
+                          <p
+                            className={`text-[9px] leading-tight mt-0.5 line-clamp-2 ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {equipped ? '✓ Active' : p.subtitle}
+                          </p>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
-              ) : (
+              )}
+
+              {/* Aura Rings Grid */}
+              {bardCat === 'frame' && (
                 <div className="grid grid-cols-2 gap-1.5">
-                  {BARD_COSMETICS.filter((c) => c.slot === bardCat).map(
-                    (item) => {
-                      const unlocked = isCosmeticUnlocked(
-                        item,
-                        profile.relics,
-                        profile.feats
-                      );
-                      const equipped =
-                        !profile.bardAvatar.useSnoovatar &&
-                        profile.bardAvatar[bardCat] === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          disabled={!unlocked || savingAvatar}
-                          onClick={() =>
-                            void handleUpdateAvatar({
-                              [bardCat]: item.id,
-                              useSnoovatar: false,
-                            })
-                          }
-                          className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
-                            equipped
-                              ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
-                              : unlocked
-                                ? 'parchment-card border-[#d4af37] cursor-pointer hover:brightness-105'
-                                : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
-                          }`}
+                  {frameCosmetics.map((item) => {
+                    const unlocked = isCosmeticUnlocked(
+                      item,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped = profile.bardAvatar.frame === item.id;
+                    const relicMeta = item.unlockRelicId
+                      ? RELIC_CATALOG.find((r) => r.id === item.unlockRelicId)
+                      : null;
+                    const featMeta = item.unlockFeatId
+                      ? FEAT_CATALOG.find((f) => f.id === item.unlockFeatId)
+                      : null;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() => void handleUpdateAvatar({ frame: item.id })}
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span
+                          className="w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center text-[10px]"
+                          style={{
+                            backgroundColor: item.primaryColor,
+                            borderColor: item.accentColor,
+                            boxShadow: `0 0 8px ${item.accentColor}88`,
+                          }}
                         >
-                          <div className="flex flex-col gap-0.5 shrink-0">
-                            <span
-                              className="w-5 h-5 rounded-full border border-black/30 flex items-center justify-center text-[10px]"
-                              style={{
-                                backgroundColor: item.primaryColor,
-                                borderColor: item.accentColor,
-                              }}
-                            >
-                              {!unlocked ? '🔒' : equipped ? '✓' : ''}
+                          {!unlocked ? '🔒' : equipped ? '✓' : ''}
+                        </span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/75'
+                            }`}
+                          >
+                            {item.name}
+                          </p>
+                          <p
+                            className={`text-[9px] truncate ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {unlocked
+                              ? 'Aura Unlocked'
+                              : featMeta
+                                ? `Feat: ${featMeta.title}`
+                                : relicMeta
+                                  ? `Relic: ${relicMeta.name}`
+                                  : 'Starter'}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Corner Crest Pin Picker (Any Owned Relic or Feat!) */}
+              {bardCat === 'badge' && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={savingAvatar}
+                    onClick={() => void handleUpdateAvatar({ badgeId: null })}
+                    className={`w-full py-1.5 px-3 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                      !profile.bardAvatar.badgeId
+                        ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                        : 'bg-black/35 border-[#d4af37]/30 text-[#f5ead2]/80'
+                    }`}
+                  >
+                    No Corner Pin
+                  </button>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {FEAT_CATALOG.filter((f) => unlockedFeats.has(f.id)).map(
+                      (f) => {
+                        const val = `feat:${f.id}`;
+                        const active = profile.bardAvatar.badgeId === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            disabled={savingAvatar}
+                            onClick={() =>
+                              void handleUpdateAvatar({ badgeId: val })
+                            }
+                            className={`rounded-lg p-1.5 flex items-center gap-1.5 border text-left cursor-pointer ${
+                              active
+                                ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                                : 'parchment-card border-[#d4af37]'
+                            }`}
+                          >
+                            <span className="text-sm shrink-0">{f.icon}</span>
+                            <span className="text-[9px] font-bold truncate">
+                              {f.title}
                             </span>
-                          </div>
-                          <div className="min-w-0">
-                            <p
-                              className={`text-[11px] font-bold truncate ${
-                                equipped
-                                  ? 'text-[#ffe875]'
-                                  : unlocked
-                                    ? 'text-[#1c1208]'
-                                    : 'text-[#f5ead2]/75'
-                              }`}
-                            >
-                              {item.name}
-                            </p>
-                            <p
-                              className={`text-[9px] truncate ${
-                                equipped
-                                  ? 'text-[#ffe875]/80'
-                                  : unlocked
-                                    ? 'text-[#6e4726]'
-                                    : 'text-[#f5ead2]/55'
-                              }`}
-                            >
-                              {unlocked
-                                ? item.unlockFeatId
-                                  ? 'Feat Exclusive'
-                                  : item.unlockRelicId
-                                    ? 'Relic Unlocked'
-                                    : 'Base Starter'
-                                : getUnlockHint(
-                                    item.unlockRelicId,
-                                    item.unlockFeatId
-                                  )}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    }
-                  )}
+                          </button>
+                        );
+                      }
+                    )}
+                    {RELIC_CATALOG.filter((r) => unlockedRelics.has(r.id)).map(
+                      (r) => {
+                        const val = `relic:${r.id}`;
+                        const active = profile.bardAvatar.badgeId === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            disabled={savingAvatar}
+                            onClick={() =>
+                              void handleUpdateAvatar({ badgeId: val })
+                            }
+                            className={`rounded-lg p-1.5 flex items-center gap-1.5 border text-left cursor-pointer ${
+                              active
+                                ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                                : 'parchment-card border-[#d4af37]'
+                            }`}
+                          >
+                            <span className="text-sm shrink-0">{r.icon}</span>
+                            <span className="text-[9px] font-bold truncate">
+                              {r.name}
+                            </span>
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -397,8 +484,8 @@ export function FeatsModal({
             <>
               <div className="flex items-center justify-between gap-2 text-[11px] text-[#f5ead2]/80">
                 <span>
-                  Every relic unlocks a matching Bard wearable &amp; progresses
-                  instrument skins!
+                  Every relic unlocks a Crest Pin, Aura, Bard Portrait, or
+                  Instrument Skin!
                 </span>
                 <span className="shrink-0 px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/35 text-[#ffe875] font-bold">
                   Pity: {profile.dupePity}/{DUPE_PITY_THRESHOLD}
@@ -433,10 +520,12 @@ export function FeatsModal({
                         {wearable && (
                           <p
                             className={`text-[9px] truncate ${
-                              owned ? 'text-[#103524] font-semibold' : 'text-[#f5ead2]/55'
+                              owned
+                                ? 'text-[#103524] font-semibold'
+                                : 'text-[#f5ead2]/55'
                             }`}
                           >
-                            🎭 {SLOT_LABELS[wearable.slot]}: {wearable.name}
+                            📌 Pin &amp; {wearable.name}
                           </p>
                         )}
                         <span
@@ -538,6 +627,9 @@ export function FeatsModal({
             FEAT_CATALOG.map((feat) => {
               const isUnlocked = unlockedFeats.has(feat.id);
               const wearable = getCosmeticForFeat(feat.id);
+              const portraitReward = BARD_PORTRAITS.find(
+                (p) => p.unlockFeatId === feat.id
+              );
               return (
                 <div
                   key={feat.id}
@@ -580,13 +672,16 @@ export function FeatsModal({
                     >
                       {feat.description}
                     </p>
-                    {wearable && (
+                    {(portraitReward || wearable) && (
                       <p
                         className={`text-[10px] font-semibold mt-0.5 ${
                           isUnlocked ? 'text-[#103524]' : 'text-[#ffe875]/70'
                         }`}
                       >
-                        🎭 Reward ({SLOT_LABELS[wearable.slot]}): {wearable.name}
+                        🎭 Unlocks:{' '}
+                        {portraitReward
+                          ? `Bard Portrait "${portraitReward.name}"`
+                          : wearable?.name}
                       </p>
                     )}
                   </div>
