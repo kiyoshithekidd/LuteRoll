@@ -11,22 +11,24 @@ import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
 type BardAvatarProps = {
   config?: BardAvatarConfig | null | undefined;
   snoovatarUrl?: string | null | undefined;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 };
 
-const SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg', string> = {
+const SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg' | 'xl', string> = {
   xs: 'w-6 h-6',
   sm: 'w-8 h-8',
   md: 'w-11 h-11',
   lg: 'w-20 h-20',
+  xl: 'w-24 h-24',
 };
 
-const BADGE_SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg', string> = {
+const BADGE_SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg' | 'xl', string> = {
   xs: 'w-3 h-3 text-[7px] -bottom-0.5 -right-0.5',
   sm: 'w-4 h-4 text-[9px] -bottom-0.5 -right-0.5',
   md: 'w-5 h-5 text-[10px] -bottom-1 -right-1',
   lg: 'w-7 h-7 text-sm -bottom-1 -right-1',
+  xl: 'w-7 h-7 text-sm -bottom-1 -right-1',
 };
 
 function resolveBadgeIcon(badgeId?: string | null): string | null {

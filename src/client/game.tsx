@@ -460,7 +460,7 @@ export const Game = () => {
         setSettledBannerValue(null);
         shouldAutoPlayNextListenRef.current = true;
         setPhase('LISTEN');
-      }, 950);
+      }, 650);
     },
     [triggerStageEffect]
   );

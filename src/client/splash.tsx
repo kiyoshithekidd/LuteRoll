@@ -127,8 +127,7 @@ export const Splash = () => {
               <BardAvatar
                 config={state.profile.bardAvatar}
                 snoovatarUrl={state.profile.snoovatarUrl}
-                size="lg"
-                className="w-24 h-24"
+                size="xl"
               />
               {finalRoll !== null && (
                 <span className="absolute -bottom-1 -left-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
