@@ -2,6 +2,7 @@ import { FEAT_CATALOG, RELIC_CATALOG } from '../../shared/constants';
 import {
   BARD_COSMETICS,
   DEFAULT_BARD_AVATAR,
+  getAuraVfxTier,
   type BardAvatarConfig,
   type BardPortraitId,
 } from '../../shared/cosmetics';
@@ -63,13 +64,33 @@ export function BardAvatar({
       : BARD_PORTRAIT_URLS[portraitId];
 
   const badgeIcon = resolveBadgeIcon(cfg.badgeId);
+  const vfxTier = getAuraVfxTier(frame.id);
   const glowShadow =
-    frame.shape === 'halo' || frame.shape === 'aura' || frame.shape === 'glow'
-      ? `0 0 12px ${frame.accentColor}99, 0 2px 6px rgba(0,0,0,0.65)`
-      : '0 2px 6px rgba(0,0,0,0.65)';
+    vfxTier === 'mythic'
+      ? `0 0 18px ${frame.accentColor}, 0 0 6px #ffffffaa`
+      : vfxTier === 'rare'
+        ? `0 0 13px ${frame.accentColor}cc, 0 2px 6px rgba(0,0,0,0.65)`
+        : '0 2px 6px rgba(0,0,0,0.65)';
 
   return (
     <div className={`relative inline-flex shrink-0 ${className}`}>
+      {vfxTier === 'rare' && size !== 'xs' && (
+        <span
+          aria-hidden="true"
+          style={{ borderColor: frame.accentColor }}
+          className="animate-aura-rare pointer-events-none absolute -inset-1 rounded-full border opacity-75"
+        />
+      )}
+      {vfxTier === 'mythic' && size !== 'xs' && (
+        <span
+          aria-hidden="true"
+          style={{
+            borderColor: frame.accentColor,
+            boxShadow: `0 0 12px ${frame.accentColor}99`,
+          }}
+          className="animate-aura-mythic pointer-events-none absolute -inset-1.5 rounded-full border-2 border-dashed opacity-90"
+        />
+      )}
       <img
         src={imgSrc}
         alt="Bard Avatar"
@@ -77,7 +98,7 @@ export function BardAvatar({
           borderColor: frame.accentColor,
           boxShadow: glowShadow,
         }}
-        className={`${SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208]`}
+        className={`relative ${SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208]`}
       />
       {badgeIcon && (
         <span

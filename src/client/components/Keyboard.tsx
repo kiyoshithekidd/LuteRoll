@@ -3,7 +3,10 @@ import type { KeyboardVoiceId } from '../../shared/api';
 import type { DifficultyTier } from '../../shared/constants';
 import {
   KEYBOARD_SKIN_THEMES,
+  NOTE_PARTICLE_SKINS,
   type KeyboardSkinTheme,
+  type NoteParticleId,
+  type NoteParticleMeta,
 } from '../../shared/cosmetics';
 import { midiToNoteName } from '../../shared/melodyGenerator';
 
@@ -15,6 +18,8 @@ type KeyboardProps = {
   feedbackState: KeyFeedbackState;
   activeTier?: DifficultyTier | null;
   voiceId?: KeyboardVoiceId;
+  particleSkin?: NoteParticleId;
+  noLights?: boolean;
   disabled?: boolean;
   onKeyPress: (midi: number) => void;
 };
@@ -124,6 +129,8 @@ function OctaveRow({
   feedbackState,
   activeTier = null,
   skin,
+  particle,
+  noLights = false,
   disabled = false,
   onKeyPress,
 }: {
@@ -134,6 +141,8 @@ function OctaveRow({
   feedbackState: KeyFeedbackState;
   activeTier?: DifficultyTier | null;
   skin: KeyboardSkinTheme;
+  particle: NoteParticleMeta;
+  noLights?: boolean;
   disabled?: boolean;
   onKeyPress: (midi: number) => void;
 }) {
@@ -152,8 +161,8 @@ function OctaveRow({
   const totalWhites = whites.length;
 
   const getKeyClasses = (midi: number, isBlack: boolean) => {
-    const isPlayback = highlightedMidi === midi;
-    const isFeedback = feedbackMidi === midi;
+    const isPlayback = !noLights && highlightedMidi === midi;
+    const isFeedback = !noLights && feedbackMidi === midi;
     const inRange = isKeyInTierRange(midi, isBlack, activeTier);
 
     if (isFeedback && feedbackState === 'wrong') {
@@ -184,7 +193,7 @@ function OctaveRow({
       <div className="flex w-full h-full gap-0.5">
         {whites.map((k) => {
           const isSpark =
-            feedbackMidi === k.midi && feedbackState === 'correct';
+            !noLights && feedbackMidi === k.midi && feedbackState === 'correct';
           return (
             <button
               key={k.midi}
@@ -202,9 +211,9 @@ function OctaveRow({
               {isSpark && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -top-2 text-xs text-emerald-300 animate-note-spark"
+                  className={`pointer-events-none absolute -top-2 text-xs animate-note-spark ${particle.colorClass}`}
                 >
-                  ✦
+                  {particle.symbol}
                 </span>
               )}
               {k.keyHint && (
@@ -221,7 +230,8 @@ function OctaveRow({
       {blacks.map((k) => {
         const leftPct = ((k.whiteIdx + 0.68) / totalWhites) * 100;
         const widthPct = (0.62 / totalWhites) * 100;
-        const isSpark = feedbackMidi === k.midi && feedbackState === 'correct';
+        const isSpark =
+          !noLights && feedbackMidi === k.midi && feedbackState === 'correct';
         return (
           <button
             key={k.midi}
@@ -245,9 +255,9 @@ function OctaveRow({
             {isSpark && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-2 text-xs text-emerald-300 animate-note-spark"
+                className={`pointer-events-none absolute -top-2 text-xs animate-note-spark ${particle.colorClass}`}
               >
-                ✦
+                {particle.symbol}
               </span>
             )}
             {k.keyHint && (
@@ -268,11 +278,16 @@ export function Keyboard({
   feedbackState,
   activeTier = null,
   voiceId = 'grand_piano',
+  particleSkin = 'emerald_spark',
+  noLights = false,
   disabled = false,
   onKeyPress,
 }: KeyboardProps) {
   const skin =
     KEYBOARD_SKIN_THEMES[voiceId] ?? KEYBOARD_SKIN_THEMES.grand_piano;
+  const particle =
+    NOTE_PARTICLE_SKINS.find((p) => p.id === particleSkin) ??
+    NOTE_PARTICLE_SKINS[0]!;
 
   useEffect(() => {
     if (disabled) return;
@@ -308,6 +323,8 @@ export function Keyboard({
             feedbackState={feedbackState}
             activeTier={activeTier}
             skin={skin}
+            particle={particle}
+            noLights={noLights}
             disabled={disabled}
             onKeyPress={onKeyPress}
           />
@@ -326,6 +343,8 @@ export function Keyboard({
             feedbackState={feedbackState}
             activeTier={activeTier}
             skin={skin}
+            particle={particle}
+            noLights={noLights}
             disabled={disabled}
             onKeyPress={onKeyPress}
           />

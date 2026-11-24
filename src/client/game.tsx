@@ -13,6 +13,8 @@ import {
 import { createRoot } from 'react-dom/client';
 import type {
   CommitRollResponse,
+  EncoreMode,
+  GauntletChallenge,
   KeyboardVoiceId,
   NoteResult,
   OpenChestResponse,
@@ -21,6 +23,7 @@ import type {
   StateResponse,
   SubmitAttemptResponse,
 } from '../shared/api';
+import { getPerformanceCommentary } from '../shared/commentary';
 import {
   DUPE_PITY_THRESHOLD,
   FAIL_ACCURACY_THRESHOLD,
@@ -128,6 +131,13 @@ export const Game = () => {
   const [showConfettiBurst, setShowConfettiBurst] = useState(false);
   const [shakeStage, setShakeStage] = useState(false);
 
+  // Encore & Bardic Gauntlet state
+  const [encoreMode, setEncoreMode] = useState<EncoreMode>('standard');
+  const [activeGauntlet, setActiveGauntlet] =
+    useState<GauntletChallenge | null>(null);
+  const [gauntletNotice, setGauntletNotice] = useState<string | null>(null);
+  const [creatingGauntlet, setCreatingGauntlet] = useState(false);
+
   const demoTimersRef = useRef<number[]>([]);
   const feedbackTimerRef = useRef<number | null>(null);
   const rollPauseTimerRef = useRef<number | null>(null);
@@ -178,13 +188,24 @@ export const Game = () => {
   }, [clearDemoTimers]);
 
   const melody = useMemo(() => {
-    if (!state || state.daily.finalRoll === null) return null;
-    return generateMelody(
-      state.daily.utcDate,
-      state.profile.username,
-      state.daily.finalRoll
-    );
-  }, [state]);
+    const base = activeGauntlet
+      ? generateMelody(
+          activeGauntlet.utcDate,
+          activeGauntlet.seedKey,
+          activeGauntlet.roll
+        )
+      : state && state.daily.finalRoll !== null
+        ? generateMelody(
+            state.daily.utcDate,
+            state.profile.username,
+            state.daily.finalRoll
+          )
+        : null;
+    if (!base) return null;
+    return encoreMode === 'fast_tempo'
+      ? { ...base, tempoMs: Math.round(base.tempoMs * 0.8) }
+      : base;
+  }, [state, activeGauntlet, encoreMode]);
 
   const playMelodyDemo = useCallback(() => {
     if (!melody || isPlayingDemo) return;
@@ -481,6 +502,8 @@ export const Game = () => {
             graceUsed,
             noteResults: finalResults,
             utcDate: activeUtcDate,
+            encoreMode,
+            gauntletId: activeGauntlet?.id,
           }),
         });
         if (!res.ok) {
@@ -522,8 +545,62 @@ export const Game = () => {
         );
       }
     },
-    [triggerStageEffect]
+    [triggerStageEffect, encoreMode, activeGauntlet]
   );
+
+  const handleStartRandomGauntlet = useCallback(async () => {
+    setGauntletNotice(null);
+    try {
+      const res = await apiFetch('/api/gauntlet/random');
+      if (!res.ok) throw new Error('Could not find a rival bard');
+      const data = (await res.json()) as {
+        ok: boolean;
+        challenge: GauntletChallenge | null;
+      };
+      if (!data.challenge) {
+        setGauntletNotice(
+          'No rival gauntlets in the tavern yet — clear your tune and throw the first one!'
+        );
+        return;
+      }
+      clearDemoTimers();
+      setActiveGauntlet(data.challenge);
+      setEncoreMode('standard');
+      setLastResult(null);
+      setPhase('LISTEN');
+      shouldAutoPlayNextListenRef.current = true;
+    } catch {
+      setGauntletNotice('Could not summon a rival bard right now.');
+    }
+  }, [clearDemoTimers]);
+
+  const handleThrowGauntlet = useCallback(async () => {
+    if (creatingGauntlet || !lastResult) return;
+    setCreatingGauntlet(true);
+    setGauntletNotice(null);
+    try {
+      const res = await apiFetch('/api/gauntlet/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accuracy: lastResult.accuracy,
+          utcDate: lastResult.daily.utcDate,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to throw gauntlet');
+      const data = (await res.json()) as {
+        ok: boolean;
+        challenge: GauntletChallenge;
+      };
+      setGauntletNotice(
+        `⚔️ Gauntlet thrown! (${Math.round(data.challenge.challengerAccuracy * 100)}% on Roll ${data.challenge.roll}) Other bards can now duel your exact melody!`
+      );
+    } catch {
+      setGauntletNotice('Could not post your Bardic Gauntlet.');
+    } finally {
+      setCreatingGauntlet(false);
+    }
+  }, [creatingGauntlet, lastResult]);
 
   const handleKeyPress = useCallback(
     (midi: number) => {
@@ -603,7 +680,8 @@ export const Game = () => {
   );
 
   const finalRoll = state?.daily.finalRoll ?? null;
-  const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
+  const effectiveRoll = activeGauntlet ? activeGauntlet.roll : finalRoll;
+  const tier = effectiveRoll !== null ? getTierForRoll(effectiveRoll) : null;
   const settledTier =
     settledBannerValue !== null ? getTierForRoll(settledBannerValue) : null;
   const anyModalOpen = showLeaderboard || showFeats || showGuide;
@@ -874,6 +952,7 @@ export const Game = () => {
                 <DiceTray3D
                   rollTrigger={rollTrigger}
                   targetRoll={targetRoll}
+                  diceSkin={state?.profile.bardAvatar.diceSkin ?? 'tavern_gold'}
                   onSettled={handleDiceSettled}
                   onTrayTap={() => void handleTriggerRoll(isRerollPending)}
                 />
@@ -943,14 +1022,68 @@ export const Game = () => {
               )}
             </div>
 
-            {finalRoll === 20 && (
+            {effectiveRoll === 20 && (
               <div className="animate-gold-pulse rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1.5 text-center text-xs font-bold text-[#ffe875]">
                 ✨ CRITICAL SUCCESS! Easiest tune with 3.0x XP payout!
               </div>
             )}
-            {finalRoll === 1 && (
+            {effectiveRoll === 1 && (
               <div className="rounded-xl bg-red-950/80 border border-red-400/60 px-3 py-1.5 text-center text-xs font-bold text-red-200">
                 💀 BRUTAL! Hardest tune, clearable for 3.0x XP!
+              </div>
+            )}
+
+            {activeGauntlet && (
+              <div className="rounded-xl bg-purple-950/75 border border-purple-400/60 px-3 py-1.5 flex items-center justify-between gap-2 text-xs text-purple-100">
+                <span className="truncate">
+                  ⚔️ <span className="font-bold">Bardic Gauntlet:</span>{' '}
+                  Beat u/{activeGauntlet.challengerUsername}&apos;s{' '}
+                  <span className="font-bold text-[#ffe875]">
+                    {Math.round(activeGauntlet.challengerAccuracy * 100)}%
+                  </span>{' '}
+                  (Roll {activeGauntlet.roll})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDemoTimers();
+                    setActiveGauntlet(null);
+                  }}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-black/45 border border-purple-300/40 text-purple-100 shrink-0 cursor-pointer"
+                >
+                  Exit Duel
+                </button>
+              </div>
+            )}
+
+            {gauntletNotice && (
+              <div className="rounded-xl bg-black/50 border border-[#d4af37]/45 px-3 py-1.5 text-center text-[11px] text-[#ffe875]">
+                {gauntletNotice}
+              </div>
+            )}
+
+            {state && state.daily.clearsCount >= 1 && (
+              <div className="flex items-center justify-between gap-1.5 rounded-xl bg-black/40 border border-[#d4af37]/30 p-1">
+                {(
+                  [
+                    { id: 'standard', label: '🎵 Standard' },
+                    { id: 'no_lights', label: '🕶️ No-Lights +50%' },
+                    { id: 'fast_tempo', label: '⚡ Fast +50%' },
+                  ] as const
+                ).map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setEncoreMode(mode.id)}
+                    className={`flex-1 py-1 px-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors cursor-pointer ${
+                      encoreMode === mode.id
+                        ? 'bg-[#d4af37] text-[#1c1208]'
+                        : 'text-[#f5ead2]/80 hover:text-white'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -978,27 +1111,40 @@ export const Game = () => {
               feedbackState={null}
               activeTier={tier}
               voiceId={state?.profile.selectedVoice ?? 'grand_piano'}
+              particleSkin={
+                state?.profile.bardAvatar.particleSkin ?? 'emerald_spark'
+              }
               disabled
               onKeyPress={() => {}}
             />
 
-            <div className="flex gap-2.5">
+            <div className="flex gap-2">
               <button
                 type="button"
                 disabled={isPlayingDemo}
                 onClick={playMelodyDemo}
-                className="flex-1 py-3 px-4 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer disabled:opacity-60"
+                className="flex-1 py-3 px-3 rounded-xl font-semibold text-sm bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#d4af37]/50 cursor-pointer disabled:opacity-60"
               >
                 {isPlayingDemo ? 'Playing...' : '🎵 Replay Tune'}
               </button>
               <button
                 type="button"
                 onClick={startAttempt}
-                className="gold-btn flex-1 py-3 px-4 rounded-xl font-bold text-sm cursor-pointer"
+                className="gold-btn flex-1 py-3 px-3 rounded-xl font-bold text-sm cursor-pointer"
               >
                 🎹 Play It Back
               </button>
             </div>
+
+            {!activeGauntlet && (
+              <button
+                type="button"
+                onClick={() => void handleStartRandomGauntlet()}
+                className="w-full py-1.5 px-3 rounded-xl text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/70 text-purple-100 border border-purple-400/45 cursor-pointer"
+              >
+                ⚔️ Random Gauntlet (Duel a Rival&apos;s Exact Melody)
+              </button>
+            )}
           </div>
         )}
 
@@ -1066,6 +1212,10 @@ export const Game = () => {
               feedbackState={feedbackState}
               activeTier={tier}
               voiceId={state?.profile.selectedVoice ?? 'grand_piano'}
+              particleSkin={
+                state?.profile.bardAvatar.particleSkin ?? 'emerald_spark'
+              }
+              noLights={phase === 'PLAY' && encoreMode === 'no_lights'}
               disabled={anyModalOpen}
               onKeyPress={handleKeyPress}
             />
@@ -1080,101 +1230,144 @@ export const Game = () => {
           </div>
         )}
 
-        {phase === 'RESULTS' && lastResult && tier && finalRoll !== null && (
-          <div className="tavern-wood-frame w-full rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-2">
-            {lastResult.passed ? (
-              <>
-                <div className="w-full flex items-center justify-center gap-3 text-left">
-                  {lastResult.accuracy === 1 || finalRoll === 20 ? (
-                    <img
-                      src={nat20SealUrl}
-                      alt="Critical Seal"
-                      className="w-11 h-11 rounded-full object-cover border-2 border-[#ffe875] shadow-md shrink-0"
-                    />
-                  ) : (
-                    <div className="text-3xl shrink-0">🎶</div>
-                  )}
-                  <div className="min-w-0">
-                    <h2 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
-                      {lastResult.accuracy === 1
-                        ? 'Flawless Performance!'
-                        : 'The Tavern Cheers!'}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-[#f5ead2]/90">
-                      {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
-                      <span className="font-bold text-[#ffe875]">
-                        +{lastResult.xpEarned} XP
-                      </span>
-                      {Boolean(lastResult.encoreBonusXp) && (
-                        <span className="text-[11px] text-amber-200">
-                          {' '}
-                          (incl. +{lastResult.encoreBonusXp} Encore)
-                        </span>
+        {phase === 'RESULTS' &&
+          lastResult &&
+          tier &&
+          effectiveRoll !== null &&
+          (() => {
+            const commentary = getPerformanceCommentary({
+              accuracy: lastResult.accuracy,
+              passed: lastResult.passed,
+              roll: effectiveRoll,
+              graceUsed: graceUsedThisRun,
+              seed: `${lastResult.daily.utcDate}:${lastResult.daily.attemptsCount}`,
+            });
+            return (
+              <div className="tavern-wood-frame w-full rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-2">
+                {lastResult.passed ? (
+                  <>
+                    <div className="w-full flex items-center justify-center gap-3 text-left">
+                      {lastResult.accuracy === 1 || effectiveRoll === 20 ? (
+                        <img
+                          src={nat20SealUrl}
+                          alt="Critical Seal"
+                          className="w-11 h-11 rounded-full object-cover border-2 border-[#ffe875] shadow-md shrink-0"
+                        />
+                      ) : (
+                        <div className="text-3xl shrink-0">🎶</div>
                       )}
-                    </p>
-                  </div>
-                </div>
-                {lastResult.leveledUp && (
-                  <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1 text-xs font-bold text-[#ffe875]">
-                    🎉 Level Up! Level {lastResult.profile.level}{' '}
-                    {lastResult.profile.title}!
-                  </div>
-                )}
-                {lastResult.streakSavedByFreeze && (
-                  <div className="w-full rounded-xl bg-sky-950/70 border border-sky-400/60 px-3 py-1 text-xs font-bold text-sky-200">
-                    🧊 Streak Freeze saved your {lastResult.profile.streak}-day
-                    streak!
-                  </div>
-                )}
-                {Boolean(lastResult.bountyCompletedXp) && (
-                  <div className="w-full rounded-xl bg-emerald-950/70 border border-emerald-400/60 px-3 py-1 text-xs font-bold text-emerald-200">
-                    🎯 Daily Bounty Complete! +{lastResult.bountyCompletedXp}{' '}
-                    Bonus XP!
-                  </div>
-                )}
-                {lastResult.unlockedFeats.length > 0 && (
-                  <div className="w-full flex flex-col gap-1">
-                    {lastResult.unlockedFeats.map((featId) => {
-                      const meta = FEAT_CATALOG.find((f) => f.id === featId);
-                      return (
-                        <div
-                          key={featId}
-                          className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-1 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]"
-                        >
-                          <span>{meta?.icon ?? '🎖️'}</span>
-                          <span>
-                            Feat Unlocked: {meta?.title ?? featId}!
+                      <div className="min-w-0">
+                        <h2 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
+                          {commentary.headline}
+                        </h2>
+                        <p className="text-[11px] text-[#f5ead2]/80 italic">
+                          {commentary.subline}
+                        </p>
+                        <p className="text-xs sm:text-sm text-[#f5ead2]/90">
+                          {Math.round(lastResult.accuracy * 100)}% Accuracy •{' '}
+                          <span className="font-bold text-[#ffe875]">
+                            +{lastResult.xpEarned} XP
                           </span>
-                        </div>
-                      );
-                    })}
+                          {Boolean(lastResult.encoreBonusXp) && (
+                            <span className="text-[11px] text-amber-200">
+                              {' '}
+                              (incl. +{lastResult.encoreBonusXp} Encore)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    {lastResult.gauntletVerdict && (
+                      <div
+                        className={`w-full rounded-xl px-3 py-1 text-xs font-bold border ${
+                          lastResult.gauntletVerdict.won
+                            ? 'bg-purple-950/80 border-purple-400/70 text-purple-100'
+                            : 'bg-black/50 border-purple-400/40 text-purple-200'
+                        }`}
+                      >
+                        {lastResult.gauntletVerdict.won
+                          ? `⚔️ Gauntlet Victory! Beat u/${lastResult.gauntletVerdict.challengerUsername} (${Math.round(lastResult.gauntletVerdict.challengerAccuracy * 100)}%) • +${lastResult.gauntletVerdict.bonusXp} XP!`
+                          : lastResult.gauntletVerdict.tied
+                            ? `⚔️ Gauntlet Tied with u/${lastResult.gauntletVerdict.challengerUsername} (${Math.round(lastResult.gauntletVerdict.challengerAccuracy * 100)}%)!`
+                            : `⚔️ u/${lastResult.gauntletVerdict.challengerUsername} held the stage (${Math.round(lastResult.gauntletVerdict.challengerAccuracy * 100)}%)`}
+                      </div>
+                    )}
+                    {Boolean(lastResult.encoreChallengeBonusXp) && (
+                      <div className="w-full rounded-xl bg-amber-950/75 border border-amber-400/60 px-3 py-1 text-xs font-bold text-amber-200">
+                        {encoreMode === 'no_lights' ? '🕶️ No-Lights' : '⚡ Fast Tempo'}{' '}
+                        Encore Clear! +{lastResult.encoreChallengeBonusXp} Bonus XP!
+                      </div>
+                    )}
+                    {lastResult.milestoneChestAwarded && (
+                      <div className="animate-gold-pulse w-full rounded-xl bg-emerald-950/80 border border-emerald-400/70 px-3 py-1 text-xs font-bold text-emerald-200">
+                        🔥 {lastResult.profile.streak}-Day Streak Milestone!{' '}
+                        {lastResult.milestoneChestAwarded === 'mythic'
+                          ? 'Mythic-or-New'
+                          : 'Guaranteed New'}{' '}
+                        Chest Awarded!
+                      </div>
+                    )}
+                    {lastResult.leveledUp && (
+                      <div className="animate-gold-pulse w-full rounded-xl bg-amber-500/25 border border-amber-300/70 px-3 py-1 text-xs font-bold text-[#ffe875]">
+                        🎉 Level Up! Level {lastResult.profile.level}{' '}
+                        {lastResult.profile.title}!
+                      </div>
+                    )}
+                    {lastResult.streakSavedByFreeze && (
+                      <div className="w-full rounded-xl bg-sky-950/70 border border-sky-400/60 px-3 py-1 text-xs font-bold text-sky-200">
+                        🧊 Streak Freeze saved your {lastResult.profile.streak}-day
+                        streak!
+                      </div>
+                    )}
+                    {Boolean(lastResult.bountyCompletedXp) && (
+                      <div className="w-full rounded-xl bg-emerald-950/70 border border-emerald-400/60 px-3 py-1 text-xs font-bold text-emerald-200">
+                        🎯 Daily Bounty Complete! +{lastResult.bountyCompletedXp}{' '}
+                        Bonus XP!
+                      </div>
+                    )}
+                    {lastResult.unlockedFeats.length > 0 && (
+                      <div className="w-full flex flex-col gap-1">
+                        {lastResult.unlockedFeats.map((featId) => {
+                          const meta = FEAT_CATALOG.find((f) => f.id === featId);
+                          return (
+                            <div
+                              key={featId}
+                              className="w-full rounded-xl bg-black/45 border border-[#d4af37]/60 px-3 py-1 flex items-center justify-center gap-2 text-xs font-bold text-[#ffe875]"
+                            >
+                              <span>{meta?.icon ?? '🎖️'}</span>
+                              <span>
+                                Feat Unlocked: {meta?.title ?? featId}!
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="animate-tomato-splat w-full flex items-center justify-center gap-3 text-left">
+                    <img
+                      src={tomatoSplatUrl}
+                      alt="Tomatoes Thrown"
+                      className="w-11 h-11 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="font-serif text-lg sm:text-xl font-bold text-red-300 leading-tight">
+                        {commentary.headline}
+                      </h2>
+                      <p className="text-xs text-[#f5ead2]/90 italic truncate">
+                        &ldquo;{commentary.subline || heckle}&rdquo;
+                      </p>
+                      <p className="text-[11px] text-red-200/85">
+                        {Math.round(lastResult.accuracy * 100)}% (need{' '}
+                        {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}%) •{' '}
+                        {lastResult.bountyCompletedXp
+                          ? `+${lastResult.bountyCompletedXp} Bounty XP`
+                          : '0 XP'}
+                      </p>
+                    </div>
                   </div>
                 )}
-              </>
-            ) : (
-              <div className="animate-tomato-splat w-full flex items-center justify-center gap-3 text-left">
-                <img
-                  src={tomatoSplatUrl}
-                  alt="Tomatoes Thrown"
-                  className="w-11 h-11 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
-                />
-                <div className="min-w-0">
-                  <h2 className="font-serif text-lg sm:text-xl font-bold text-red-300 leading-tight">
-                    Tomatoes Thrown!
-                  </h2>
-                  <p className="text-xs text-[#f5ead2]/90 italic truncate">
-                    &ldquo;{heckle}&rdquo;
-                  </p>
-                  <p className="text-[11px] text-red-200/85">
-                    {Math.round(lastResult.accuracy * 100)}% (need{' '}
-                    {Math.round(FAIL_ACCURACY_THRESHOLD * 100)}%) •{' '}
-                    {lastResult.bountyCompletedXp
-                      ? `+${lastResult.bountyCompletedXp} Bounty XP`
-                      : '0 XP'}
-                  </p>
-                </div>
-              </div>
-            )}
 
             <div className="w-full flex items-center justify-center gap-2.5 text-[11px] text-[#ffe875]/90 bg-black/35 border border-[#d4af37]/25 rounded-lg px-2.5 py-1">
               <span>Plays: {lastResult.daily.attemptsCount}</span>
@@ -1251,9 +1444,11 @@ export const Game = () => {
                           <p className="text-[11px] text-[#6e4726]">
                             {chestReveal.isDuplicate
                               ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
-                              : chestReveal.pityTriggered
-                                ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
-                                : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
+                              : chestReveal.milestoneGuaranteed
+                                ? `🔥 Milestone Guaranteed! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                                : chestReveal.pityTriggered
+                                  ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                                  : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
                           </p>
                           {unlockedWearable && (
                             <p className="text-[10px] font-bold text-[#103524] truncate">
@@ -1294,13 +1489,19 @@ export const Game = () => {
 
             <ResultCard
               utcDate={lastResult.daily.utcDate}
-              roll={finalRoll}
+              roll={effectiveRoll}
               accuracy={lastResult.accuracy}
               xpEarned={lastResult.xpEarned}
               passed={lastResult.passed}
               noteResults={lastResult.noteResults ?? noteResults}
               profile={lastResult.profile}
             />
+
+            {gauntletNotice && (
+              <div className="w-full rounded-xl bg-purple-950/70 border border-purple-400/50 px-3 py-1.5 text-[11px] text-purple-100">
+                {gauntletNotice}
+              </div>
+            )}
 
             <div className="w-full flex gap-2">
               <button
@@ -1310,6 +1511,16 @@ export const Game = () => {
               >
                 Play Again (Grind XP)
               </button>
+              {lastResult.passed && !activeGauntlet && (
+                <button
+                  type="button"
+                  disabled={creatingGauntlet}
+                  onClick={() => void handleThrowGauntlet()}
+                  className="py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-purple-950/80 hover:bg-purple-900/80 text-purple-100 border border-purple-400/55 cursor-pointer disabled:opacity-60"
+                >
+                  {creatingGauntlet ? '...' : '⚔️ Throw Gauntlet'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => openModal('leaderboard')}
@@ -1319,7 +1530,8 @@ export const Game = () => {
               </button>
             </div>
           </div>
-        )}
+            );
+          })()}
       </main>
 
       <footer className="text-center text-[11px] text-[#f5ead2]/55">

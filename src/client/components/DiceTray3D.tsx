@@ -1,16 +1,22 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import {
+  DICE_SKINS,
+  type DiceSkinId,
+  type DiceSkinMeta,
+} from '../../shared/cosmetics';
 import { soundEngine } from '../audio/soundEngine';
 
 type DiceTray3DProps = {
   rollTrigger: number;
   targetRoll: number | null;
+  diceSkin?: DiceSkinId;
   onSettled: (value: number) => void;
   onTrayTap?: () => void;
 };
 
-function createD20AtlasTexture(): THREE.CanvasTexture {
+function createD20AtlasTexture(skin: DiceSkinMeta): THREE.CanvasTexture {
   const cols = 5;
   const rows = 4;
   const cellSize = 200;
@@ -35,20 +41,24 @@ function createD20AtlasTexture(): THREE.CanvasTexture {
         cy,
         cellSize * 0.55
       );
-      grad.addColorStop(0, '#ffe875');
-      grad.addColorStop(0.55, '#d4af37');
-      grad.addColorStop(1, '#8a6412');
+      grad.addColorStop(0, skin.gradInner);
+      grad.addColorStop(0.55, skin.gradMid);
+      grad.addColorStop(1, skin.gradOuter);
       ctx.fillStyle = grad;
       ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
 
-      ctx.strokeStyle = 'rgba(255, 245, 200, 0.35)';
+      ctx.strokeStyle = skin.ringColor;
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.arc(cx, cy + 8, cellSize * 0.28, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.fillStyle =
-        num === 20 ? '#1b0f00' : num === 1 ? '#5c0a0a' : '#1c1208';
+        num === 20
+          ? skin.nat20Color
+          : num === 1
+            ? skin.nat1Color
+            : skin.numColor;
       ctx.font = 'bold 56px Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -282,6 +292,7 @@ function createPhysicsWorld(
 export function DiceTray3D({
   rollTrigger,
   targetRoll,
+  diceSkin = 'tavern_gold',
   onSettled,
   onTrayTap,
 }: DiceTray3DProps) {
@@ -359,8 +370,10 @@ export function DiceTray3D({
       wallMeshes.push(m);
     }
 
-    // Gold d20 die
-    const atlasTex = createD20AtlasTexture();
+    // Custom d20 die skin
+    const skinObj =
+      DICE_SKINS.find((s) => s.id === diceSkin) ?? DICE_SKINS[0]!;
+    const atlasTex = createD20AtlasTexture(skinObj);
     const {
       geom: dieGeo,
       shape: dieShape,
@@ -592,7 +605,7 @@ export function DiceTray3D({
         container.removeChild(renderer.domElement);
       }
     };
-  }, [rollTrigger, targetRoll]);
+  }, [rollTrigger, targetRoll, diceSkin]);
 
   return (
     <div

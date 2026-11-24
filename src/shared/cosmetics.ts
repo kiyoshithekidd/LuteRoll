@@ -56,9 +56,229 @@ export function isPortraitUnlocked(
   return false;
 }
 
+export type DiceSkinId =
+  | 'tavern_gold'
+  | 'emerald_felt'
+  | 'obsidian_crimson'
+  | 'starlight_crystal'
+  | 'astral_galaxy';
+
+export type DiceSkinMeta = {
+  id: DiceSkinId;
+  name: string;
+  unlockHint: string;
+  unlockStreak?: number;
+  unlockRelics?: number;
+  unlockFeat?: RareFeat;
+  gradInner: string;
+  gradMid: string;
+  gradOuter: string;
+  ringColor: string;
+  numColor: string;
+  nat20Color: string;
+  nat1Color: string;
+};
+
+export const DICE_SKINS: readonly DiceSkinMeta[] = [
+  {
+    id: 'tavern_gold',
+    name: 'Tavern Gold',
+    unlockHint: 'Starter',
+    gradInner: '#ffe875',
+    gradMid: '#d4af37',
+    gradOuter: '#8a6412',
+    ringColor: 'rgba(255, 245, 200, 0.35)',
+    numColor: '#1c1208',
+    nat20Color: '#1b0f00',
+    nat1Color: '#5c0a0a',
+  },
+  {
+    id: 'emerald_felt',
+    name: 'Emerald Felt d20',
+    unlockHint: '3-Day Streak',
+    unlockStreak: 3,
+    gradInner: '#6ee7b7',
+    gradMid: '#10b981',
+    gradOuter: '#064e3b',
+    ringColor: 'rgba(255, 232, 117, 0.5)',
+    numColor: '#fef3c7',
+    nat20Color: '#ffe875',
+    nat1Color: '#fca5a5',
+  },
+  {
+    id: 'obsidian_crimson',
+    name: 'Obsidian & Crimson',
+    unlockHint: 'Feat: Underdog Encore (Nat 1)',
+    unlockFeat: 'nat1_clear',
+    gradInner: '#3f3f46',
+    gradMid: '#18181b',
+    gradOuter: '#09090b',
+    ringColor: 'rgba(239, 68, 68, 0.55)',
+    numColor: '#fca5a5',
+    nat20Color: '#fde047',
+    nat1Color: '#ef4444',
+  },
+  {
+    id: 'starlight_crystal',
+    name: 'Starlight Crystal',
+    unlockHint: '25 Relics',
+    unlockRelics: 25,
+    gradInner: '#e0f2fe',
+    gradMid: '#38bdf8',
+    gradOuter: '#0c4a6e',
+    ringColor: 'rgba(255, 255, 255, 0.55)',
+    numColor: '#082f49',
+    nat20Color: '#fef08a',
+    nat1Color: '#9f1239',
+  },
+  {
+    id: 'astral_galaxy',
+    name: 'Astral Galaxy d20',
+    unlockHint: 'Feat: Mythic Resonance',
+    unlockFeat: 'mythic_relic',
+    gradInner: '#c084fc',
+    gradMid: '#4c1d95',
+    gradOuter: '#1e1b4b',
+    ringColor: 'rgba(253, 224, 71, 0.65)',
+    numColor: '#fef08a',
+    nat20Color: '#ffffff',
+    nat1Color: '#fb7185',
+  },
+] as const;
+
+export function isDiceSkinUnlocked(
+  skin: DiceSkinMeta,
+  ownedRelics: readonly string[],
+  ownedFeats: readonly RareFeat[],
+  streak: number
+): boolean {
+  if (skin.unlockStreak !== undefined && streak < skin.unlockStreak) return false;
+  if (skin.unlockRelics !== undefined && ownedRelics.length < skin.unlockRelics) {
+    return false;
+  }
+  if (skin.unlockFeat && !ownedFeats.includes(skin.unlockFeat)) return false;
+  return true;
+}
+
+export type NoteParticleId =
+  | 'emerald_spark'
+  | 'golden_note'
+  | 'arcane_rune'
+  | 'ember_spark'
+  | 'frost_flake';
+
+export type NoteParticleMeta = {
+  id: NoteParticleId;
+  name: string;
+  symbol: string;
+  colorClass: string;
+  unlockHint: string;
+  unlockRelics?: number;
+  unlockFeat?: RareFeat;
+};
+
+export const NOTE_PARTICLE_SKINS: readonly NoteParticleMeta[] = [
+  {
+    id: 'emerald_spark',
+    name: 'Emerald Spark',
+    symbol: '✦',
+    colorClass: 'text-emerald-300',
+    unlockHint: 'Starter',
+  },
+  {
+    id: 'golden_note',
+    name: 'Golden Notes',
+    symbol: '♪',
+    colorClass: 'text-[#ffe875]',
+    unlockHint: 'Feat: Golden Ear (100%)',
+    unlockFeat: 'flawless',
+  },
+  {
+    id: 'arcane_rune',
+    name: 'Arcane Runes',
+    symbol: '✧',
+    colorClass: 'text-cyan-300',
+    unlockHint: '10 Relics',
+    unlockRelics: 10,
+  },
+  {
+    id: 'ember_spark',
+    name: 'Ember Sparks',
+    symbol: '🔥',
+    colorClass: 'text-orange-300',
+    unlockHint: 'Feat: Encore Virtuoso (5+ plays)',
+    unlockFeat: 'grinder5',
+  },
+  {
+    id: 'frost_flake',
+    name: 'Frostflakes',
+    symbol: '❄️',
+    colorClass: 'text-sky-200',
+    unlockHint: '20 Relics',
+    unlockRelics: 20,
+  },
+] as const;
+
+export function isParticleSkinUnlocked(
+  skin: NoteParticleMeta,
+  ownedRelics: readonly string[],
+  ownedFeats: readonly RareFeat[]
+): boolean {
+  if (skin.unlockRelics !== undefined && ownedRelics.length < skin.unlockRelics) {
+    return false;
+  }
+  if (skin.unlockFeat && !ownedFeats.includes(skin.unlockFeat)) return false;
+  return true;
+}
+
+export type BardEpithetId =
+  | 'none'
+  | 'tomato_dodger'
+  | 'nat20_magnet'
+  | 'midnight_grinder'
+  | 'lute_whisperer'
+  | 'underdog_hero'
+  | 'vault_curator'
+  | 'tavern_immortal';
+
+export type BardEpithetMeta = {
+  id: BardEpithetId;
+  label: string;
+  unlockHint: string;
+  unlockFeat?: RareFeat;
+  unlockRelics?: number;
+};
+
+export const BARD_EPITHETS: readonly BardEpithetMeta[] = [
+  { id: 'none', label: 'No Epithet', unlockHint: 'Starter' },
+  { id: 'tomato_dodger', label: 'Tomato Dodger', unlockHint: 'Feat: Tavern Debut', unlockFeat: 'first_tune' },
+  { id: 'nat20_magnet', label: 'Nat 20 Magnet', unlockHint: 'Feat: Blessed by Fate', unlockFeat: 'nat20' },
+  { id: 'midnight_grinder', label: 'Midnight Grinder', unlockHint: 'Feat: Encore Virtuoso', unlockFeat: 'grinder5' },
+  { id: 'lute_whisperer', label: 'Lute Whisperer', unlockHint: 'Feat: Golden Ear', unlockFeat: 'flawless' },
+  { id: 'underdog_hero', label: 'Brutal Conqueror', unlockHint: 'Feat: Underdog Encore', unlockFeat: 'nat1_clear' },
+  { id: 'vault_curator', label: 'Vault Curator', unlockHint: '15 Relics', unlockRelics: 15 },
+  { id: 'tavern_immortal', label: 'Tavern Immortal', unlockHint: 'Feat: 30-Day Streak', unlockFeat: 'streak30' },
+] as const;
+
+export function isEpithetUnlocked(
+  ep: BardEpithetMeta,
+  ownedRelics: readonly string[],
+  ownedFeats: readonly RareFeat[]
+): boolean {
+  if (ep.id === 'none') return true;
+  if (ep.unlockRelics !== undefined && ownedRelics.length < ep.unlockRelics) {
+    return false;
+  }
+  if (ep.unlockFeat && !ownedFeats.includes(ep.unlockFeat)) return false;
+  return true;
+}
+
 export type BardAvatarConfig = {
   portrait?: BardPortraitId;
   badgeId?: string | null;
+  diceSkin?: DiceSkinId;
+  particleSkin?: NoteParticleId;
+  epithet?: BardEpithetId;
   hat: string;
   cloak: string;
   prop: string;
@@ -98,6 +318,9 @@ export const BARD_SKIN_TONES: readonly SkinToneMeta[] = [
 export const DEFAULT_BARD_AVATAR: BardAvatarConfig = {
   portrait: 'busker',
   badgeId: null,
+  diceSkin: 'tavern_gold',
+  particleSkin: 'emerald_spark',
+  epithet: 'none',
   hat: 'feathered_cap',
   cloak: 'forest_green',
   prop: 'wooden_lute',
@@ -224,7 +447,8 @@ export function isCosmeticUnlocked(
 export function sanitizeBardAvatarConfig(
   input: Partial<BardAvatarConfig> | null | undefined,
   ownedRelics: readonly string[],
-  ownedFeats: readonly RareFeat[] = []
+  ownedFeats: readonly RareFeat[] = [],
+  streak = 0
 ): BardAvatarConfig {
   const pickValid = (slot: BardCosmeticSlot, candidate?: string): string => {
     if (candidate) {
@@ -264,6 +488,38 @@ export function sanitizeBardAvatarConfig(
     }
   }
 
+  let diceSkin: DiceSkinId = 'tavern_gold';
+  if (input?.diceSkin) {
+    const foundDice = DICE_SKINS.find((d) => d.id === input.diceSkin);
+    if (
+      foundDice &&
+      isDiceSkinUnlocked(foundDice, ownedRelics, ownedFeats, streak)
+    ) {
+      diceSkin = foundDice.id;
+    }
+  }
+
+  let particleSkin: NoteParticleId = 'emerald_spark';
+  if (input?.particleSkin) {
+    const foundParticle = NOTE_PARTICLE_SKINS.find(
+      (p) => p.id === input.particleSkin
+    );
+    if (
+      foundParticle &&
+      isParticleSkinUnlocked(foundParticle, ownedRelics, ownedFeats)
+    ) {
+      particleSkin = foundParticle.id;
+    }
+  }
+
+  let epithet: BardEpithetId = 'none';
+  if (input?.epithet) {
+    const foundEp = BARD_EPITHETS.find((e) => e.id === input.epithet);
+    if (foundEp && isEpithetUnlocked(foundEp, ownedRelics, ownedFeats)) {
+      epithet = foundEp.id;
+    }
+  }
+
   const validSkin = BARD_SKIN_TONES.some((s) => s.id === input?.skinTone)
     ? (input!.skinTone as string)
     : DEFAULT_BARD_AVATAR.skinTone;
@@ -271,6 +527,9 @@ export function sanitizeBardAvatarConfig(
   return {
     portrait,
     badgeId,
+    diceSkin,
+    particleSkin,
+    epithet,
     hat: pickValid('hat', input?.hat),
     cloak: pickValid('cloak', input?.cloak),
     prop: pickValid('prop', input?.prop),
@@ -278,6 +537,26 @@ export function sanitizeBardAvatarConfig(
     skinTone: validSkin,
     useSnoovatar: Boolean(input?.useSnoovatar),
   };
+}
+
+export type AuraVfxTier = 'base' | 'rare' | 'mythic';
+
+export function getAuraVfxTier(frameId: string): AuraVfxTier {
+  const item = BARD_COSMETICS.find((c) => c.slot === 'frame' && c.id === frameId);
+  if (!item) return 'base';
+  if (
+    item.unlockFeatId === 'mythic_relic' ||
+    item.unlockFeatId === 'nat20' ||
+    item.unlockRelicId === 'chronos_escapement' ||
+    item.unlockRelicId === 'gilded_harp' ||
+    item.unlockRelicId === 'runic_diapason'
+  ) {
+    return 'mythic';
+  }
+  if (item.shape === 'halo' || item.shape === 'aura' || item.shape === 'ring') {
+    return 'rare';
+  }
+  return 'base';
 }
 
 export type KeyboardSkinTheme = {
