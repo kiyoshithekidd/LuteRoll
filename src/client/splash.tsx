@@ -5,6 +5,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StateResponse } from '../shared/api';
 import { getTierForRoll } from '../shared/constants';
+import { apiFetch } from './apiClient';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
@@ -58,7 +59,7 @@ export const Splash = () => {
   useEffect(() => {
     trackAppReady();
     let active = true;
-    fetch('/api/state')
+    apiFetch('/api/state')
       .then((res) => (res.ok ? res.json() : null))
       .then((data: StateResponse | null) => {
         if (active && data?.type === 'state') {
@@ -76,6 +77,7 @@ export const Splash = () => {
   const utcDate = state?.daily.utcDate ?? new Date().toISOString().slice(0, 10);
   const finalRoll = state?.daily.finalRoll ?? null;
   const tier = finalRoll !== null ? getTierForRoll(finalRoll) : null;
+  const rollersToday = state?.tavernStats?.rollersToday ?? 0;
 
   return (
     <main className="tavern-stage-bg min-h-screen w-full flex items-center justify-center p-2.5 sm:p-5">
@@ -117,6 +119,13 @@ export const Splash = () => {
               'Roll a d20, learn the tune, earn the XP.'
             )}
           </p>
+          {/* Issue #7: Live tavern stat — hidden cleanly if 0 or unavailable */}
+          {rollersToday > 0 && (
+            <p className="text-[11px] font-semibold text-[#ffe875]/90 pt-0.5">
+              🎲 {rollersToday.toLocaleString()}{' '}
+              {rollersToday === 1 ? 'bard has' : 'bards have'} rolled today
+            </p>
+          )}
         </div>
 
         {finalRoll !== null && tier ? (

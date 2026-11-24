@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import type { PlayerProfile } from '../../shared/api';
+import type {
+  NoteResult,
+  PlayerProfile,
+  ShareCommentResponse,
+} from '../../shared/api';
+import { formatResultCardText } from '../../shared/resultCard';
+import { apiFetch } from '../apiClient';
 
 type ResultCardProps = {
   utcDate: string;
@@ -7,18 +13,9 @@ type ResultCardProps = {
   accuracy: number;
   xpEarned: number;
   passed: boolean;
+  noteResults?: NoteResult[];
   profile: PlayerProfile;
 };
-
-function formatCardDate(utcDate: string): string {
-  const dt = new Date(`${utcDate}T00:00:00Z`);
-  if (Number.isNaN(dt.getTime())) return utcDate;
-  return dt.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 function getUtcResetCountdown(): string {
   const now = new Date();
@@ -39,30 +36,47 @@ export function ResultCard({
   accuracy,
   xpEarned,
   passed,
+  noteResults,
   profile,
 }: ResultCardProps) {
   const [copied, setCopied] = useState(false);
   const [commentState, setCommentState] = useState<
-    'idle' | 'posting' | 'posted' | 'error'
+    'idle' | 'posting' | 'posted' | 'already' | 'signin' | 'error'
   >('idle');
   const [subState, setSubState] = useState<'idle' | 'joining' | 'joined'>(
     'idle'
   );
 
-  const pct = Math.round(accuracy * 100);
-  const dateLabel = formatCardDate(utcDate);
-  const cardText = passed
-    ? `Lute Roll, ${dateLabel}\nRolled ${roll}, ${pct}% accuracy, +${xpEarned} XP\nStreak ${profile.streak}, Level ${profile.level} ${profile.title}`
-    : `Lute Roll, ${dateLabel}\nRolled ${roll}, ${pct}% accuracy — Tomatoes thrown! (+0 XP)\nStreak ${profile.streak}, Level ${profile.level} ${profile.title}`;
+  const displayCardText = formatResultCardText({
+    utcDate,
+    roll,
+    accuracy,
+    xpEarned,
+    passed,
+    noteResults,
+    profile,
+    forRedditMarkdown: false,
+  });
+
+  const redditMarkdownText = formatResultCardText({
+    utcDate,
+    roll,
+    accuracy,
+    xpEarned,
+    passed,
+    noteResults,
+    profile,
+    forRedditMarkdown: true,
+  });
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(cardText);
+      await navigator.clipboard.writeText(redditMarkdownText);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
       const area = document.createElement('textarea');
-      area.value = cardText;
+      area.value = redditMarkdownText;
       area.style.position = 'fixed';
       area.style.opacity = '0';
       document.body.appendChild(area);
@@ -75,15 +89,34 @@ export function ResultCard({
   };
 
   const handlePostComment = async () => {
-    if (commentState === 'posting' || commentState === 'posted') return;
+    if (
+      commentState === 'posting' ||
+      commentState === 'posted' ||
+      commentState === 'already'
+    ) {
+      return;
+    }
+    if (profile.isAnonymous) {
+      setCommentState('signin');
+      return;
+    }
     setCommentState('posting');
     try {
-      const res = await fetch('/api/share-comment', {
+      const res = await apiFetch('/api/share-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: cardText }),
+        body: JSON.stringify({ utcDate }),
       });
-      setCommentState(res.ok ? 'posted' : 'error');
+      if (res.status === 401) {
+        setCommentState('signin');
+        return;
+      }
+      if (!res.ok) {
+        setCommentState('error');
+        return;
+      }
+      const data = (await res.json()) as ShareCommentResponse;
+      setCommentState(data.alreadyShared ? 'already' : 'posted');
     } catch {
       setCommentState('error');
     }
@@ -93,7 +126,7 @@ export function ResultCard({
     if (subState !== 'idle') return;
     setSubState('joining');
     try {
-      const res = await fetch('/api/subscribe', { method: 'POST' });
+      const res = await apiFetch('/api/subscribe', { method: 'POST' });
       setSubState(res.ok ? 'joined' : 'idle');
     } catch {
       setSubState('idle');
@@ -112,23 +145,31 @@ export function ResultCard({
       </div>
 
       <pre className="font-mono text-[11px] leading-snug whitespace-pre-wrap text-[#1c1208]">
-        {cardText}
+        {displayCardText}
       </pre>
 
       <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
           onClick={() => void handlePostComment()}
-          disabled={commentState === 'posting' || commentState === 'posted'}
+          disabled={
+            commentState === 'posting' ||
+            commentState === 'posted' ||
+            commentState === 'already'
+          }
           className="py-1.5 px-2 rounded-lg font-bold text-[11px] bg-[#103524] hover:bg-[#164731] text-[#ffe875] border border-[#2f6f4e] cursor-pointer transition-colors disabled:opacity-70"
         >
           {commentState === 'posting'
             ? 'Posting...'
             : commentState === 'posted'
               ? '✓ Posted!'
-              : commentState === 'error'
-                ? 'Retry Post'
-                : '💬 Post to Thread'}
+              : commentState === 'already'
+                ? '✓ Shared Today'
+                : commentState === 'signin'
+                  ? 'Sign In to Post'
+                  : commentState === 'error'
+                    ? 'Retry Post'
+                    : '💬 Post to Thread'}
         </button>
 
         <button

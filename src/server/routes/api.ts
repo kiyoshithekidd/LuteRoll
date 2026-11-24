@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { context, reddit } from '@devvit/web/server';
 import type {
   CommitRollRequest,
@@ -10,11 +10,15 @@ import type {
   StateResponse,
   SubmitAttemptRequest,
 } from '../../shared/api';
+import { formatResultCardText } from '../../shared/resultCard';
 import {
+  claimShareCommentSlot,
   commitRoll,
   getDailyState,
+  getLastRunForShare,
   getLeaderboards,
   getPlayerProfile,
+  getTavernStats,
   openMysteryChest,
   resetDailyState,
   selectKeyboardVoice,
@@ -24,7 +28,9 @@ import { syncBardUserFlair } from '../flairService';
 
 export const api = new Hono();
 
-async function resolvePlayer() {
+const GUEST_ID_PATTERN = /^guest_[a-zA-Z0-9-]{12,48}$/;
+
+async function resolvePlayer(c: Context) {
   const username = await reddit.getCurrentUsername();
   if (username) {
     const snoovatarUrl = await reddit
@@ -37,7 +43,17 @@ async function resolvePlayer() {
       snoovatarUrl: snoovatarUrl ?? null,
     };
   }
-  const fallbackId = context.userId ?? context.postId ?? 'guest';
+
+  // B1 fix: isolate logged-out visitors per browser using a validated client guest ID
+  const headerGuestId = c.req.header('x-guest-id')?.trim();
+  const validatedGuestId =
+    headerGuestId && GUEST_ID_PATTERN.test(headerGuestId)
+      ? headerGuestId
+      : null;
+
+  const fallbackId =
+    context.userId ?? validatedGuestId ?? context.postId ?? 'guest';
+
   return {
     playerKey: `anon:${fallbackId}`,
     username: 'Wandering Bard',
@@ -57,8 +73,8 @@ api.get('/state', async (c) => {
   }
 
   try {
-    const player = await resolvePlayer();
-    const [profile, daily] = await Promise.all([
+    const player = await resolvePlayer(c);
+    const [profile, daily, tavernStats] = await Promise.all([
       getPlayerProfile(
         player.playerKey,
         player.username,
@@ -66,6 +82,7 @@ api.get('/state', async (c) => {
         player.snoovatarUrl
       ),
       getDailyState(player.playerKey),
+      getTavernStats(),
     ]);
 
     return c.json<StateResponse>({
@@ -74,6 +91,7 @@ api.get('/state', async (c) => {
       isDevSubreddit: context.subredditName === 'lute_roll_dev',
       profile,
       daily,
+      tavernStats,
     });
   } catch (error) {
     const message =
@@ -91,27 +109,12 @@ api.post('/roll', async (c) => {
   }
 
   try {
-    const body = await c.req.json<CommitRollRequest>();
-    if (
-      typeof body.roll !== 'number' ||
-      Number.isNaN(body.roll) ||
-      body.roll < 1 ||
-      body.roll > 20
-    ) {
-      return c.json<ErrorResponse>(
-        { status: 'error', message: 'Invalid roll value (must be 1..20)' },
-        400
-      );
-    }
+    const body = (await c.req.json().catch(() => ({}))) as CommitRollRequest;
+    const player = await resolvePlayer(c);
+    const { roll, daily, unlockedFeat, unlockedFeats, tavernStats } =
+      await commitRoll(player.playerKey, Boolean(body.isReroll));
 
-    const player = await resolvePlayer();
-    const { daily, unlockedFeat } = await commitRoll(
-      player.playerKey,
-      body.roll,
-      Boolean(body.isReroll)
-    );
-
-    if (unlockedFeat) {
+    if (unlockedFeats.length > 0) {
       const profile = await getPlayerProfile(
         player.playerKey,
         player.username,
@@ -122,8 +125,11 @@ api.post('/roll', async (c) => {
 
     return c.json<CommitRollResponse>({
       type: 'roll',
+      roll,
       daily,
       unlockedFeat,
+      unlockedFeats,
+      tavernStats,
     });
   } catch (error) {
     const message =
@@ -154,17 +160,19 @@ api.post('/attempt', async (c) => {
       );
     }
 
-    const player = await resolvePlayer();
+    const player = await resolvePlayer(c);
     const result = await submitAttempt(
       player.playerKey,
       player.username,
       player.isAnonymous,
       body.accuracy,
       player.snoovatarUrl,
-      Boolean(body.graceUsed)
+      Boolean(body.graceUsed),
+      body.noteResults,
+      body.utcDate
     );
 
-    if (result.passed) {
+    if (result.passed || result.leveledUp || result.unlockedFeats.length > 0) {
       await syncBardUserFlair(result.profile);
     }
 
@@ -186,19 +194,59 @@ api.post('/share-comment', async (c) => {
   }
 
   try {
-    const body = (await c.req.json()) as Partial<ShareCommentRequest>;
-    const text = typeof body.text === 'string' ? body.text.trim() : '';
-    if (!text || text.length > 500) {
+    const body = (await c.req.json().catch(() => ({}))) as ShareCommentRequest;
+    const player = await resolvePlayer(c);
+
+    // B2 fix: prevent unauthenticated bot comment spam and format card strictly server-side
+    if (player.isAnonymous) {
       return c.json<ErrorResponse>(
-        { status: 'error', message: 'Invalid result card text' },
+        { status: 'error', message: 'Sign in to Reddit to post your result card.' },
+        401
+      );
+    }
+
+    const [profile, lastRun] = await Promise.all([
+      getPlayerProfile(
+        player.playerKey,
+        player.username,
+        player.isAnonymous,
+        player.snoovatarUrl
+      ),
+      getLastRunForShare(player.playerKey, body.utcDate),
+    ]);
+
+    if (!lastRun) {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Complete a run before posting to the thread.' },
         400
       );
     }
 
-    const player = await resolvePlayer();
-    const commentBody = player.isAnonymous
-      ? text
-      : `**u/${player.username}**\n\n${text}`;
+    const allowed = await claimShareCommentSlot(
+      player.playerKey,
+      postId,
+      lastRun.utcDate
+    );
+    if (!allowed) {
+      return c.json<ShareCommentResponse>({
+        type: 'share-comment',
+        ok: true,
+        alreadyShared: true,
+      });
+    }
+
+    const formattedCard = formatResultCardText({
+      utcDate: lastRun.utcDate,
+      roll: lastRun.roll,
+      accuracy: lastRun.accuracy,
+      xpEarned: lastRun.xpEarned,
+      passed: lastRun.passed,
+      noteResults: lastRun.noteResults,
+      profile,
+      forRedditMarkdown: true,
+    });
+
+    const commentBody = `**u/${player.username}**\n\n${formattedCard}`;
     await reddit.submitComment({
       id: postId,
       text: commentBody,
@@ -228,7 +276,7 @@ api.post('/subscribe', async (c) => {
 
 api.get('/leaderboard', async (c) => {
   try {
-    const player = await resolvePlayer();
+    const player = await resolvePlayer(c);
     const board = await getLeaderboards(player.username, player.isAnonymous);
     return c.json(board);
   } catch (error) {
@@ -254,11 +302,12 @@ api.post('/dev-reset', async (c) => {
     );
   }
 
-  const player = await resolvePlayer();
+  const player = await resolvePlayer(c);
   await resetDailyState(player.playerKey);
-  const [profile, daily] = await Promise.all([
+  const [profile, daily, tavernStats] = await Promise.all([
     getPlayerProfile(player.playerKey, player.username, player.isAnonymous),
     getDailyState(player.playerKey),
+    getTavernStats(),
   ]);
 
   return c.json<StateResponse>({
@@ -267,18 +316,25 @@ api.post('/dev-reset', async (c) => {
     isDevSubreddit: true,
     profile,
     daily,
+    tavernStats,
   });
 });
 
 api.post('/open-chest', async (c) => {
   try {
-    const player = await resolvePlayer();
+    const player = await resolvePlayer(c);
     const result = await openMysteryChest(
       player.playerKey,
       player.username,
       player.isAnonymous,
       player.snoovatarUrl
     );
+
+    // B8 fix: sync flair if chest duplicate XP leveled up the bard or unlocked a feat
+    if (result.leveledUp || result.unlockedFeats.length > 0) {
+      await syncBardUserFlair(result.profile);
+    }
+
     return c.json(result);
   } catch (error) {
     const message =
@@ -296,7 +352,7 @@ api.post('/voice', async (c) => {
         400
       );
     }
-    const player = await resolvePlayer();
+    const player = await resolvePlayer(c);
     const profile = await selectKeyboardVoice(
       player.playerKey,
       player.username,

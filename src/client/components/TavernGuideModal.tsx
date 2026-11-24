@@ -60,7 +60,14 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
                 🎁 <strong>Mystery Chests:</strong> Earn 1 on your first clear +
                 1 bonus chest for 100% or Nat 20. Collect{' '}
                 <strong>48 Relics</strong> (3rd duplicate guarantees a new
-                relic) to unlock <strong>12 piano, organ &amp; synth voices</strong>.
+                relic) to unlock{' '}
+                <strong>13 lute, piano, organ &amp; synth voices</strong> (Tavern
+                Upright &amp; Tavern Lute start unlocked!).
+              </li>
+              <li>
+                🍻 <strong>Tavern Tip Jar:</strong> Every bard&apos;s XP fills
+                today&apos;s subreddit Tip Jar — hitting the goal activates{' '}
+                <strong>+15% Encore XP</strong> for everyone all day.
               </li>
               <li>
                 🛡️ <strong>Ward of Grace:</strong> A 3-day streak grants{' '}
@@ -120,8 +127,8 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
 
           <p className="text-[10px] text-[#6e4726]/85 border-t border-[#9c7538]/30 pt-2">
             Ported from <em>College of Keys</em> (d20 Performance Check &amp;
-            Daily Quest System). Desktop keys: A S D F G H J K (plus W E T Y U
-            for sharps).
+            Daily Quest System). Desktop keys: Lower C4–B4 (Z–M, sharps S D G H
+            J) • Upper C5–C6 (Q–I, sharps 2 3 5 6 7).
           </p>
         </div>
       </div>

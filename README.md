@@ -11,8 +11,8 @@ One sentence version: roll the die, learn the tune, earn the XP, come back tomor
 1. **Roll a d20:** High roll means an easier melody. **Nat 20** is the easiest tune with a **3.0x crit payout**. **Nat 1** is the hardest (*Brutal*) tune, still clearable, and pays **3.0x**. You get **1 reroll per day** and can replay as many times a day as you want.
 2. **Listen & Replay:** Watch the keys light up as Web Audio plays the daily melody, then tap it back note for note on the on-screen keyboard.
 3. **Score & Survive:** Hit **50%+ accuracy** to clear and earn XP (below 50% = tomatoes & 0 XP). Maintain a **3-day streak** to unlock **Ward of Grace** (1 free missed note per run; **2** at a 7-day streak) and earn a **Streak Freeze** every 5 days.
-4. **Collect & Progress:** Earn up to **2 Mystery Chests per day** to collect **48 Tavern Relics** (with 3-pull duplicate pity) and unlock **12 synthesized piano, organ, and synth voices**. Level up across **15 Bard Title tiers** from *Busker* (Lvl 1) to *Mythic Maestro* (Lvl 100), complete **Daily Bounties**, and unlock **15 Feats**.
-5. **Compete on Reddit:** Your Bard Title syncs to your `r/luteroll` user flair. Share your result card in the daily thread and climb the daily & all-time leaderboards.
+4. **Collect & Progress:** Earn up to **2 Mystery Chests per day** to collect **48 Tavern Relics** (with 3-pull duplicate pity) and unlock **13 synthesized lute, piano, organ, and synth voices** (*Tavern Upright* & *Tavern Lute* start unlocked). Level up across **15 Bard Title tiers** from *Busker* (Lvl 1) to *Mythic Maestro* (Lvl 100), complete **Daily Bounties**, and unlock **15 Feats**.
+5. **Compete on Reddit:** Your Bard Title syncs to your `r/luteroll` user flair. Share your Wordle-style emoji result card (`🟩🟦🟥`) in the daily thread, help fill the subreddit's **Tavern Tip Jar** for a **+15% Encore XP** buff, and climb the **Daily, Weekly, and All-Time** leaderboards.
 
 ## Contest
 
@@ -26,12 +26,12 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 
 Playable & verified on Devvit Web (`r/lute_roll_dev`), featuring:
 
-- **3D d20 Tavern Tray:** Three.js + physics-driven d20 roll with 1 daily reroll and 950ms reveal banner.
-- **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio with lit key guides.
-- **12 Unlockable Keyboard Voices:** *Tavern Upright*, *Saloon Honky-Tonk*, *Baroque Harpsichord*, *Clockwork Music Box*, *Velvet Electric Keys*, *Funky Clavinet*, *Cathedral Pipe Organ*, *Tavern Concertina*, *Arcane Lead Synth*, *Gilded Carillon*, *Starlight Celesta*, and *Astral Concert Grand* — all synthesized with zero external audio samples.
-- **Tavern Vault & Retention Loop:** 48 Collectible Relics (Common/Uncommon/Rare/Mythic) with 3-pull Duplicate Pity, 15 Feats, 15 Bard Title tiers (Levels 1–100), Daily Tavern Bounties, Ward of Grace spell forgiveness, and Tavern Streak Freezes.
-- **Mobile & Desktop Controls:** Thumb-friendly 2-row touch keyboard (`C5–C6` over `C4–B4`) with mobile haptics, plus desktop keyboard shortcuts (`A W S E D F T G Y H U J K` for `C4–C5`), with out-of-range keys dimmed per tier and an in-card Tavern Guide accessible before rolling.
-- **Reddit-Native Loop:** Automatic `r/luteroll` user flair sync, Snoovatars in HUD & leaderboards, one-tap result card posting to thread comments, subreddit subscribe CTA, auto-stickied daily UTC midnight post scheduler, and Devvit Journeys telemetry.
+- **Live 3D d20 Tavern Tray:** Three.js + Cannon-es physics-driven d20 roll with idle candlelit spin, wood/felt collision audio, server-authoritative roll integrity, 1 daily reroll, and 950ms reveal banner with Nat 20 confetti & Nat 1 rumble.
+- **Deterministic Daily Melodies:** Seeded per `UTC date + player + roll`, auto-played via Web Audio with warm tavern room ambience, root-5th lute cadence cue, lit key guides, and visual progress pips.
+- **13 Unlockable Keyboard Voices:** *Tavern Upright*, *Tavern Lute* (both free at start), *Saloon Honky-Tonk*, *Baroque Harpsichord*, *Clockwork Music Box*, *Velvet Electric Keys*, *Funky Clavinet*, *Cathedral Pipe Organ*, *Tavern Concertina*, *Arcane Lead Synth*, *Gilded Carillon*, *Starlight Celesta*, and *Astral Concert Grand* — all synthesized with zero external audio samples.
+- **Tavern Vault & Retention Loop:** 48 Collectible Relics (Common/Uncommon/Rare/Mythic) with 3-pull Duplicate Pity and shaking chest rarity reveals, 15 Feats, 15 Bard Title tiers (Levels 1–100), Daily Tavern Bounties, Ward of Grace spell forgiveness, and Tavern Streak Freezes.
+- **Mobile & Desktop Controls:** Thumb-friendly 2-row touch keyboard (`C5–C6` over `C4–B4`) with mobile haptics & hit sparks, plus full 2-octave desktop keyboard shortcuts (`Z–M` + `S D G H J` for `C4–B4`, `Q–I` + `2 3 5 6 7` for `C5–C6`), with out-of-range keys dimmed per tier and an in-card Tavern Guide accessible before rolling.
+- **Reddit-Native Loop:** Live splash stat (*"X bards have rolled today"*), automatic `r/luteroll` user flair sync, Snoovatars in HUD & **Daily / Weekly / All-Time** leaderboards, server-verified one-tap Wordle-style emoji result cards posted to thread comments, Community Co-Op **Tavern Tip Jar** (+15% Encore XP) & **Tavern Pulse**, subreddit subscribe CTA, auto-stickied daily UTC midnight post scheduler with *Yesterday's Headliner Bard* recap, and Devvit Journeys telemetry.
 
 > **HACKATHON DEPLOYMENT RULE — DO NOT PUBLISH:**
 > Never run `devvit publish` (or `npm run launch`). Per the Reddit Game of the Day Hackathon rules, apps must remain **private/unpublished** during the contest. Use `npm run dev` (`devvit playtest`) for live testing and `npm run deploy` (`devvit upload`) to upload private versions.

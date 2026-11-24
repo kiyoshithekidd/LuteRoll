@@ -30,7 +30,12 @@
 .tavern-stage-bg {
   background-color: #140b05;
   background-image:
-    radial-gradient(circle at 50% 25%, rgba(255, 198, 92, 0.14) 0%, rgba(16, 10, 5, 0.84) 70%, rgba(10, 6, 3, 0.96) 100%),
+    radial-gradient(
+      circle at 50% 25%,
+      rgba(255, 198, 92, 0.14) 0%,
+      rgba(16, 10, 5, 0.84) 70%,
+      rgba(10, 6, 3, 0.96) 100%
+    ),
     url('./assets/tavern-bg.webp');
   background-size: cover;
   background-position: center;
@@ -39,7 +44,11 @@
 .tavern-felt-bg {
   background-color: #0d2b1d;
   background-image:
-    radial-gradient(circle at 50% 35%, rgba(24, 74, 50, 0.55) 0%, rgba(8, 28, 19, 0.88) 100%),
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(24, 74, 50, 0.55) 0%,
+      rgba(8, 28, 19, 0.88) 100%
+    ),
     url('./assets/tray-felt.webp');
   background-size: cover;
   background-position: center;
@@ -48,7 +57,11 @@
 .tavern-wood-frame {
   background-color: #24150a;
   background-image:
-    linear-gradient(180deg, rgba(58, 35, 18, 0.88) 0%, rgba(28, 16, 8, 0.94) 100%),
+    linear-gradient(
+      180deg,
+      rgba(58, 35, 18, 0.88) 0%,
+      rgba(28, 16, 8, 0.94) 100%
+    ),
     url('./assets/tray-wood.webp');
   background-size: cover;
   border: 2px solid #754c28;
@@ -61,9 +74,15 @@
 .parchment-card {
   background-color: #f3e4c3;
   background-image:
-    linear-gradient(180deg, rgba(255, 249, 232, 0.65) 0%, rgba(232, 211, 167, 0.72) 100%),
+    linear-gradient(
+      180deg,
+      rgba(255, 249, 232, 0.65) 0%,
+      rgba(232, 211, 167, 0.72) 100%
+    ),
     url('./assets/parchment.webp');
-  background-size: 100% 100%, 256px 256px;
+  background-size:
+    100% 100%,
+    256px 256px;
   background-repeat: no-repeat, repeat;
   color: #26160a;
   border: 2px solid #9c7538;
@@ -104,8 +123,111 @@
   animation: tomatoSplat 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+@keyframes tomatoFlySplat {
+  0% {
+    transform: translateY(-90px) scale(0.35) rotate(-35deg);
+    opacity: 0;
+  }
+  35% {
+    transform: translateY(0) scale(1.22) rotate(8deg);
+    opacity: 0.95;
+  }
+  75% {
+    transform: translateY(4px) scale(1.02) rotate(4deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(18px) scale(0.95) rotate(6deg);
+    opacity: 0;
+  }
+}
+
+.animate-tomato-fly {
+  animation: tomatoFlySplat 1.25s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+@keyframes stageShake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  18% {
+    transform: translate3d(-6px, 2px, 0);
+  }
+  36% {
+    transform: translate3d(6px, -2px, 0);
+  }
+  54% {
+    transform: translate3d(-4px, 1px, 0);
+  }
+  72% {
+    transform: translate3d(4px, -1px, 0);
+  }
+}
+
+.animate-stage-shake {
+  animation: stageShake 0.42s ease-out;
+}
+
+@keyframes chestShake {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  20% {
+    transform: rotate(-3deg) scale(1.03);
+  }
+  40% {
+    transform: rotate(3deg) scale(1.04);
+  }
+  60% {
+    transform: rotate(-2.5deg) scale(1.05);
+  }
+  80% {
+    transform: rotate(2.5deg) scale(1.03);
+  }
+}
+
+.animate-chest-shake {
+  animation: chestShake 0.48s ease-in-out infinite;
+}
+
+@keyframes noteSpark {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-16px) scale(1.25);
+    opacity: 0;
+  }
+}
+
+.animate-note-spark {
+  animation: noteSpark 0.28s ease-out forwards;
+}
+
+@keyframes confettiPop {
+  0% {
+    transform: translateY(0) scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110px) scale(1) rotate(240deg);
+    opacity: 0;
+  }
+}
+
+.animate-confetti-pop {
+  animation: confettiPop 1.25s ease-out forwards;
+}
+
 @keyframes goldPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 12px rgba(255, 232, 117, 0.35);
   }
   50% {
@@ -115,4 +237,16 @@
 
 .animate-gold-pulse {
   animation: goldPulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-tomato-splat,
+  .animate-tomato-fly,
+  .animate-stage-shake,
+  .animate-chest-shake,
+  .animate-note-spark,
+  .animate-confetti-pop,
+  .animate-gold-pulse {
+    animation: none !important;
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardVoiceId, PlayerProfile, RareFeat } from '../../shared/api';
 import {
   DUPE_PITY_THRESHOLD,
@@ -35,28 +35,38 @@ export function FeatsModal({
 }: FeatsModalProps) {
   const [tab, setTab] = useState<VaultTab>('relics');
   const [savingVoice, setSavingVoice] = useState<KeyboardVoiceId | null>(null);
+  const previewTimersRef = useRef<number[]>([]);
+
+  const clearPreviewTimers = () => {
+    for (const id of previewTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    previewTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      clearPreviewTimers();
+    };
+  }, []);
 
   const unlockedFeats = new Set<RareFeat>(profile.feats);
   const unlockedRelics = new Set<string>(profile.relics);
   const featCount = FEAT_CATALOG.filter((f) => unlockedFeats.has(f.id)).length;
   const relicCount = RELIC_CATALOG.filter((r) => unlockedRelics.has(r.id)).length;
 
+  // B5 fix: use explicit voiceOverride on playNote so previews never mutate equipped voice
   const handlePreviewVoice = (voiceId: KeyboardVoiceId) => {
     soundEngine.unlock();
-    const prev = soundEngine.getVoice();
-    soundEngine.setVoice(voiceId);
-    soundEngine.playNote(60, 220);
-    window.setTimeout(() => {
-      soundEngine.setVoice(voiceId);
-      soundEngine.playNote(64, 220);
+    clearPreviewTimers();
+    soundEngine.playNote(60, 220, voiceId);
+    const t1 = window.setTimeout(() => {
+      soundEngine.playNote(64, 220, voiceId);
     }, 150);
-    window.setTimeout(() => {
-      soundEngine.setVoice(voiceId);
-      soundEngine.playNote(67, 320);
+    const t2 = window.setTimeout(() => {
+      soundEngine.playNote(67, 320, voiceId);
     }, 300);
-    window.setTimeout(() => {
-      soundEngine.setVoice(prev);
-    }, 700);
+    previewTimersRef.current.push(t1, t2);
   };
 
   const handleEquipVoice = async (voiceId: KeyboardVoiceId) => {
@@ -70,7 +80,12 @@ export function FeatsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Tavern Vault"
+    >
       <div className="tavern-wood-frame w-full max-w-md rounded-2xl p-4 sm:p-5 flex flex-col gap-3 max-h-[88vh]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
