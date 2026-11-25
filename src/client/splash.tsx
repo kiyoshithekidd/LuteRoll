@@ -1,15 +1,16 @@
 import './index.css';
 
 import { context, requestExpandedMode } from '@devvit/web/client';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StateResponse } from '../shared/api';
 import { getTierForRoll } from '../shared/constants';
 import { apiFetch } from './apiClient';
+import { soundEngine } from './audio/soundEngine';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
-import { TavernGuideModal } from './components/TavernGuideModal';
+import { BardAvatar } from './components/BardAvatar';
 import { trackAppReady } from './telemetry';
 
 function getUtcResetCountdown(): string {
@@ -25,23 +26,6 @@ function getUtcResetCountdown(): string {
   return `${hours}h ${mins}m`;
 }
 
-function D20Emblem({ value }: { value: number | null }) {
-  return (
-    <div className="relative flex items-center justify-center w-24 h-24 select-none animate-gold-pulse rounded-full">
-      <img
-        src={luteCrestUrl}
-        alt="Lute Roll Crest"
-        className="w-24 h-24 rounded-full object-cover border-2 border-[#d4af37] shadow-[0_6px_18px_rgba(0,0,0,0.75)]"
-      />
-      {value !== null && (
-        <span className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
-          d20: {value}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function formatShortUtcDate(utcDate: string): string {
   const dt = new Date(`${utcDate}T00:00:00Z`);
   if (Number.isNaN(dt.getTime())) return utcDate;
@@ -54,7 +38,6 @@ function formatShortUtcDate(utcDate: string): string {
 
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
-  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     trackAppReady();
@@ -64,6 +47,7 @@ export const Splash = () => {
       .then((data: StateResponse | null) => {
         if (active && data?.type === 'state') {
           setState(data);
+          soundEngine.setVoice(data.profile.selectedVoice);
         }
       })
       .catch(() => {});
@@ -71,6 +55,21 @@ export const Splash = () => {
       active = false;
     };
   }, []);
+
+  const openModalInExpandedMode = (
+    e: MouseEvent<HTMLButtonElement>,
+    modal: 'vault' | 'guide'
+  ) => {
+    try {
+      localStorage.setItem(
+        'luteroll_open_modal_at',
+        JSON.stringify({ modal, at: Date.now() })
+      );
+    } catch {
+      // ignore storage errors
+    }
+    requestExpandedMode(e.nativeEvent, 'game');
+  };
 
   const username =
     state?.profile.username ?? context.username ?? 'Wandering Bard';
@@ -103,7 +102,36 @@ export const Splash = () => {
           </div>
         </div>
 
-        <D20Emblem value={finalRoll} />
+        {/* #27: Hero Bard Avatar on Homepage (clickable to open Vault/Editor) */}
+        <div className="relative flex items-center justify-center select-none">
+          {state ? (
+            <button
+              type="button"
+              onClick={(e) => openModalInExpandedMode(e, 'vault')}
+              className="relative cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
+              title="Customize your Bard, Skins & Trophies"
+            >
+              <BardAvatar
+                config={state.profile.bardAvatar}
+                snoovatarUrl={state.profile.snoovatarUrl}
+                size="xl"
+              />
+              {finalRoll !== null && (
+                <span className="absolute -bottom-1 -left-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
+                  d20: {finalRoll}
+                </span>
+              )}
+            </button>
+          ) : (
+            <div className="relative flex items-center justify-center w-24 h-24 animate-gold-pulse rounded-full">
+              <img
+                src={luteCrestUrl}
+                alt="Lute Roll Crest"
+                className="w-24 h-24 rounded-full object-cover border-2 border-[#d4af37] shadow-[0_6px_18px_rgba(0,0,0,0.75)]"
+              />
+            </div>
+          )}
+        </div>
 
         <div className="space-y-0.5">
           <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-[#ffe875] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
@@ -154,25 +182,34 @@ export const Splash = () => {
           </div>
         )}
 
-        <div className="w-full flex items-center gap-2">
+        <div className="w-full flex items-center gap-1.5">
+          {state && (
+            <button
+              type="button"
+              onClick={(e) => openModalInExpandedMode(e, 'vault')}
+              className="px-3 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
+              title="Customize Bard, Skins, Relics & Feats"
+            >
+              🎭 Vault
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setShowGuide(true)}
-            className="px-3.5 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
+            onClick={(e) => openModalInExpandedMode(e, 'guide')}
+            className="px-3 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
+            aria-label="Tavern Guide"
           >
-            📜 Guide
+            📜
           </button>
           <button
             type="button"
             onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-            className="gold-btn flex-1 py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base tracking-wide cursor-pointer transition-transform"
+            className="gold-btn flex-1 py-3.5 px-3 rounded-xl font-bold text-sm sm:text-base tracking-wide cursor-pointer transition-transform"
           >
             {finalRoll !== null ? 'Play Today’s Tune' : 'Enter & Roll d20'}
           </button>
         </div>
       </section>
-
-      {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
     </main>
   );
 };

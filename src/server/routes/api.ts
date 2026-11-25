@@ -14,16 +14,22 @@ import { formatResultCardText } from '../../shared/resultCard';
 import {
   claimShareCommentSlot,
   commitRoll,
+  createGauntlet,
+  devUnlockAll,
   getDailyState,
+  getGauntletById,
   getLastRunForShare,
   getLeaderboards,
   getPlayerProfile,
+  getRandomGauntlet,
   getTavernStats,
   openMysteryChest,
   resetDailyState,
+  saveBardAvatar,
   selectKeyboardVoice,
   submitAttempt,
 } from '../redisStore';
+import type { BardAvatarConfig } from '../../shared/cosmetics';
 import { syncBardUserFlair } from '../flairService';
 
 export const api = new Hono();
@@ -169,7 +175,9 @@ api.post('/attempt', async (c) => {
       player.snoovatarUrl,
       Boolean(body.graceUsed),
       body.noteResults,
-      body.utcDate
+      body.utcDate,
+      body.encoreMode ?? 'standard',
+      body.gauntletId
     );
 
     if (result.passed || result.leveledUp || result.unlockedFeats.length > 0) {
@@ -320,6 +328,44 @@ api.post('/dev-reset', async (c) => {
   });
 });
 
+api.post('/dev-unlock-all', async (c) => {
+  if (context.subredditName !== 'lute_roll_dev') {
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: 'Dev unlock is only allowed on r/lute_roll_dev',
+      },
+      403
+    );
+  }
+
+  const { postId } = context;
+  if (!postId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'postId is required' },
+      400
+    );
+  }
+
+  const player = await resolvePlayer(c);
+  const { profile, daily } = await devUnlockAll(
+    player.playerKey,
+    player.username,
+    player.isAnonymous,
+    player.snoovatarUrl
+  );
+  const tavernStats = await getTavernStats();
+
+  return c.json<StateResponse>({
+    type: 'state',
+    postId,
+    isDevSubreddit: true,
+    profile,
+    daily,
+    tavernStats,
+  });
+});
+
 api.post('/open-chest', async (c) => {
   try {
     const player = await resolvePlayer(c);
@@ -365,4 +411,72 @@ api.post('/voice', async (c) => {
       error instanceof Error ? error.message : 'Could not select voice';
     return c.json<ErrorResponse>({ status: 'error', message }, 400);
   }
+});
+
+api.post('/avatar', async (c) => {
+  try {
+    const body = (await c.req.json()) as {
+      bardAvatar?: Partial<BardAvatarConfig>;
+    };
+    if (!body.bardAvatar || typeof body.bardAvatar !== 'object') {
+      return c.json<ErrorResponse>(
+        { status: 'error', message: 'Missing bardAvatar config' },
+        400
+      );
+    }
+    const player = await resolvePlayer(c);
+    const profile = await saveBardAvatar(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      body.bardAvatar,
+      player.snoovatarUrl
+    );
+    return c.json({ ok: true, profile });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not save bard avatar';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.post('/gauntlet/create', async (c) => {
+  try {
+    const player = await resolvePlayer(c);
+    const challenge = await createGauntlet(
+      player.playerKey,
+      player.username,
+      player.isAnonymous,
+      player.snoovatarUrl
+    );
+    return c.json({ ok: true, challenge });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not create Gauntlet';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.get('/gauntlet/random', async (c) => {
+  try {
+    const player = await resolvePlayer(c);
+    const challenge = await getRandomGauntlet(player.username);
+    return c.json({ ok: true, challenge });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Could not find a rival Gauntlet';
+    return c.json<ErrorResponse>({ status: 'error', message }, 400);
+  }
+});
+
+api.get('/gauntlet/:id', async (c) => {
+  const id = c.req.param('id');
+  const challenge = await getGauntletById(id);
+  if (!challenge) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'Gauntlet expired or not found' },
+      404
+    );
+  }
+  return c.json({ ok: true, challenge });
 });

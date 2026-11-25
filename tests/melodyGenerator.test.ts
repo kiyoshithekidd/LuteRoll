@@ -15,6 +15,18 @@ import {
 } from '../src/shared/resultCard';
 import { formatBardFlairText } from '../src/server/flairService';
 import type { PlayerProfile } from '../src/shared/api';
+import {
+  BARD_EPITHETS,
+  DEFAULT_BARD_AVATAR,
+  DICE_SKINS,
+  getCosmeticForFeat,
+  getCosmeticForRelic,
+  KEYBOARD_SKIN_THEMES,
+  NOTE_PARTICLE_SKINS,
+  sanitizeBardAvatarConfig,
+} from '../src/shared/cosmetics';
+import { getPerformanceCommentary } from '../src/shared/commentary';
+import { FEAT_CATALOG, RELIC_CATALOG } from '../src/shared/constants';
 
 function isWhiteKey(midi: number): boolean {
   const pc = midi % 12;
@@ -184,11 +196,126 @@ describe('formatBardFlairText (B8 badge priority)', () => {
     feats: ['nat20', 'streak30'],
     relics: [],
     selectedVoice: 'grand_piano',
+    bardAvatar: DEFAULT_BARD_AVATAR,
   };
 
   it('prioritizes 30-day streak trophy over Nat 20 dice badge', () => {
     const flair = formatBardFlairText(baseProfile);
     assert.ok(flair.endsWith('🏆'), `Expected 🏆 badge, got "${flair}"`);
     assert.ok(flair.length <= 64);
+  });
+});
+
+describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
+  it('maps every single voice to an instrument-matched keyboard skin', () => {
+    for (const voice of KEYBOARD_VOICES) {
+      const skin = KEYBOARD_SKIN_THEMES[voice.id];
+      assert.ok(skin, `Missing keyboard skin theme for voice ${voice.id}`);
+      assert.equal(skin.id, voice.id);
+    }
+  });
+
+  it('maps all 48 relics 1-to-1 to a Bard wearable', () => {
+    assert.equal(RELIC_CATALOG.length, 48);
+    for (const relic of RELIC_CATALOG) {
+      const item = getCosmeticForRelic(relic.id);
+      assert.ok(item, `Relic ${relic.id} (${relic.name}) has no mapped wearable`);
+    }
+  });
+
+  it('maps all 15 feats 1-to-1 to a Bard wearable', () => {
+    assert.equal(FEAT_CATALOG.length, 15);
+    for (const feat of FEAT_CATALOG) {
+      const item = getCosmeticForFeat(feat.id);
+      assert.ok(item, `Feat ${feat.id} (${feat.title}) has no mapped wearable`);
+    }
+  });
+
+  it('enforces relic and feat unlock rules during avatar sanitization', () => {
+    const lockedAttempt = sanitizeBardAvatarConfig(
+      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
+      [],
+      []
+    );
+    assert.equal(lockedAttempt.hat, DEFAULT_BARD_AVATAR.hat);
+    assert.equal(lockedAttempt.cloak, DEFAULT_BARD_AVATAR.cloak);
+    assert.equal(lockedAttempt.frame, DEFAULT_BARD_AVATAR.frame);
+
+    const unlockedAttempt = sanitizeBardAvatarConfig(
+      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
+      ['grand_crown'],
+      ['level25', 'nat20']
+    );
+    assert.equal(unlockedAttempt.hat, 'crown_of_keys');
+    assert.equal(unlockedAttempt.cloak, 'virtuoso_cape');
+    assert.equal(unlockedAttempt.frame, 'nat20_crit_aura');
+  });
+
+  it('defines Phase A dice skins, particle skins, and epithets with unlock enforcement', () => {
+    assert.ok(DICE_SKINS.length >= 5);
+    assert.ok(NOTE_PARTICLE_SKINS.length >= 5);
+    assert.ok(BARD_EPITHETS.length >= 6);
+
+    const locked = sanitizeBardAvatarConfig(
+      {
+        diceSkin: 'obsidian_crimson',
+        particleSkin: 'ember_spark',
+        epithet: 'nat20_magnet',
+      },
+      [],
+      []
+    );
+    assert.equal(locked.diceSkin, DEFAULT_BARD_AVATAR.diceSkin);
+    assert.equal(locked.particleSkin, DEFAULT_BARD_AVATAR.particleSkin);
+    assert.equal(locked.epithet, DEFAULT_BARD_AVATAR.epithet);
+
+    const unlocked = sanitizeBardAvatarConfig(
+      {
+        diceSkin: 'obsidian_crimson',
+        particleSkin: 'ember_spark',
+        epithet: 'nat20_magnet',
+      },
+      [],
+      ['nat1_clear', 'grinder5', 'nat20']
+    );
+    assert.equal(unlocked.diceSkin, 'obsidian_crimson');
+    assert.equal(unlocked.particleSkin, 'ember_spark');
+    assert.equal(unlocked.epithet, 'nat20_magnet');
+  });
+
+  it('produces deterministic, tiered performance commentary across outcomes', () => {
+    const nat20Flawless = getPerformanceCommentary({
+      accuracy: 1,
+      passed: true,
+      roll: 20,
+      graceUsed: false,
+      seed: '2026-11-24:1',
+    });
+    const nat20Repeat = getPerformanceCommentary({
+      accuracy: 1,
+      passed: true,
+      roll: 20,
+      graceUsed: false,
+      seed: '2026-11-24:1',
+    });
+    assert.deepEqual(nat20Flawless, nat20Repeat);
+    assert.ok(nat20Flawless.headline.length > 0);
+    assert.ok(nat20Flawless.subline.length > 0);
+
+    const nearMiss = getPerformanceCommentary({
+      accuracy: 0.48,
+      passed: false,
+      roll: 10,
+      graceUsed: false,
+      seed: '2026-11-24:2',
+    });
+    const wipeout = getPerformanceCommentary({
+      accuracy: 0.1,
+      passed: false,
+      roll: 10,
+      graceUsed: false,
+      seed: '2026-11-24:2',
+    });
+    assert.notEqual(nearMiss.headline, wipeout.headline);
   });
 });

@@ -1,3 +1,5 @@
+import type { BardAvatarConfig } from './cosmetics';
+
 export type RareFeat =
   | 'first_tune'
   | 'flawless'
@@ -47,7 +49,30 @@ export type PlayerProfile = {
   feats: RareFeat[];
   relics: string[];
   selectedVoice: KeyboardVoiceId;
+  bardAvatar: BardAvatarConfig;
   snoovatarUrl?: string | null;
+};
+
+export type EncoreMode = 'standard' | 'no_lights' | 'fast_tempo';
+
+export type GauntletChallenge = {
+  id: string;
+  utcDate: string;
+  roll: number;
+  seedKey: string;
+  challengerUsername: string;
+  challengerAccuracy: number;
+  challengerBardAvatar?: BardAvatarConfig | null;
+  challengerSnoovatarUrl?: string | null;
+};
+
+export type GauntletVerdict = {
+  gauntletId: string;
+  won: boolean;
+  tied: boolean;
+  challengerUsername: string;
+  challengerAccuracy: number;
+  bonusXp: number;
 };
 
 export type DailyState = {
@@ -63,6 +88,7 @@ export type DailyState = {
   chestsEarned: number;
   chestsOpened: number;
   bountyClaimed: boolean;
+  milestoneChestTier?: 'unowned' | 'mythic' | null;
 };
 
 export type TavernStats = {
@@ -79,6 +105,7 @@ export type OpenChestResponse = {
   relicId: string;
   isDuplicate: boolean;
   pityTriggered?: boolean;
+  milestoneGuaranteed?: boolean;
   bonusXp: number;
   leveledUp: boolean;
   previousLevel: number;
@@ -115,6 +142,8 @@ export type SubmitAttemptRequest = {
   graceUsed?: boolean;
   noteResults?: NoteResult[];
   utcDate?: string;
+  encoreMode?: EncoreMode;
+  gauntletId?: string;
 };
 
 export type SubmitAttemptResponse = {
@@ -123,7 +152,10 @@ export type SubmitAttemptResponse = {
   accuracy: number;
   xpEarned: number;
   encoreBonusXp?: number;
+  encoreChallengeBonusXp?: number;
   bountyCompletedXp?: number;
+  milestoneChestAwarded?: 'unowned' | 'mythic' | null;
+  gauntletVerdict?: GauntletVerdict | null;
   streakSavedByFreeze?: boolean;
   leveledUp: boolean;
   previousLevel: number;
@@ -140,6 +172,8 @@ export type LeaderboardEntry = {
   username: string;
   score: number;
   snoovatarUrl?: string | null;
+  bardAvatar?: BardAvatarConfig | null;
+  epithet?: string | null;
 };
 
 export type ShareCommentRequest = {
