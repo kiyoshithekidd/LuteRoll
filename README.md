@@ -24,9 +24,9 @@ Reddit Game of the Day Hackathon, Nov 11 to Dec 8, 2026. Submissions close Dec 8
 
 ## Status
 
-Playable & verified on Devvit Web (`r/lute_roll_dev`), featuring:
+Playable & verified on Devvit Web (`r/luteroll` & `r/lute_roll_dev`), featuring:
 
-- **Live 3D d20 Tavern Tray & Unlockable Dice Skins:** Three.js + Cannon-es physics-driven d20 roll with idle candlelit spin, wood/felt collision audio, **5 unlockable d20 dice skins** (*Tavern Gold*, *Emerald Felt*, *Obsidian & Crimson*, *Starlight Crystal*, *Astral Galaxy*), server-authoritative roll integrity, 1 daily reroll, and 950ms reveal banner with Nat 20 confetti & Nat 1 rumble.
+- **Live 3D d20 Tavern Tray & Unlockable Dice Skins:** Three.js + Cannon-es physics-driven d20 roll with idle candlelit spin, wood/felt collision audio, **5 unlockable d20 dice skins** (*Tavern Gold*, *Emerald Felt*, *Obsidian & Crimson*, *Starlight Crystal*, *Astral Galaxy*), server-authoritative roll integrity, 1 daily reroll, and 650ms reveal banner with Nat 20 confetti & Nat 1 rumble.
 - **Deterministic Daily Melodies & Encore Challenges:** Seeded per `UTC date + player + roll`, auto-played via Web Audio with warm tavern room ambience, root-5th lute cadence cue, lit key guides, and visual progress pips. After your first daily clear, unlock **Encore Challenge Modes** (**No-Lights** or **Fast Tempo +20%**) for **+50% Bonus XP**.
 - **Bardic Gauntlet (Rival Duels):** Throw a **Bardic Gauntlet** after clearing a tune or accept a **Random Gauntlet** to duel another bard's exact `(utcDate, seedKey, roll)` melody for **+35 XP** victory bonuses.
 - **13 Unlockable Voices, Instrument-Matched Keyboard Skins & Note Sparks:** *Tavern Upright*, *Tavern Lute* (both free at start), *Saloon Honky-Tonk*, *Baroque Harpsichord* (with authentic inverted ebony & gilded ivory keys), *Clockwork Music Box*, *Velvet Electric Keys*, *Funky Clavinet*, *Cathedral Pipe Organ*, *Tavern Concertina*, *Arcane Lead Synth*, *Gilded Carillon*, *Starlight Celesta*, and *Astral Concert Grand* — each visually transforms the keyboard, paired with **5 unlockable Note-Hit Spark skins**.
