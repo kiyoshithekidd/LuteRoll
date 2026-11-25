@@ -9,6 +9,7 @@ import {
 import {
   BARD_COSMETICS,
   BARD_EPITHETS,
+  BARD_FAMILIARS,
   BARD_PORTRAITS,
   DICE_SKINS,
   getCosmeticForFeat,
@@ -16,6 +17,7 @@ import {
   isCosmeticUnlocked,
   isDiceSkinUnlocked,
   isEpithetUnlocked,
+  isFamiliarUnlocked,
   isParticleSkinUnlocked,
   isPortraitUnlocked,
   KEYBOARD_SKIN_THEMES,
@@ -26,6 +28,7 @@ import { soundEngine } from '../audio/soundEngine';
 import bountySealUrl from '../assets/bounty-seal.webp';
 import nat20SealUrl from '../assets/nat20-seal.webp';
 import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
+import { FAMILIAR_URLS } from '../assets/familiarAssets';
 import { BardAvatar } from './BardAvatar';
 
 type FeatsModalProps = {
@@ -36,7 +39,14 @@ type FeatsModalProps = {
 };
 
 type VaultTab = 'relics' | 'voices' | 'bard' | 'feats';
-type BardCategory = 'portrait' | 'frame' | 'dice' | 'sparks' | 'epithet' | 'badge';
+type BardCategory =
+  | 'portrait'
+  | 'familiar'
+  | 'frame'
+  | 'dice'
+  | 'sparks'
+  | 'epithet'
+  | 'badge';
 
 const RARITY_STYLES: Record<
   'common' | 'uncommon' | 'rare' | 'mythic',
@@ -246,6 +256,7 @@ export function FeatsModal({
                 {(
                   [
                     ['portrait', '🎭 Bards'],
+                    ['familiar', '🐾 Familiars'],
                     ['frame', '✨ Auras'],
                     ['dice', '🎲 d20 Skins'],
                     ['sparks', '✦ Sparks'],
@@ -267,6 +278,80 @@ export function FeatsModal({
                   </button>
                 ))}
               </div>
+
+              {/* Animal Familiars Grid (#23) */}
+              {bardCat === 'familiar' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {BARD_FAMILIARS.map((fam) => {
+                    const unlocked = isFamiliarUnlocked(
+                      fam,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped =
+                      (profile.bardAvatar.familiar ?? 'none') === fam.id;
+                    const imgUrl =
+                      fam.id !== 'none' ? FAMILIAR_URLS[fam.id] : null;
+                    return (
+                      <button
+                        key={fam.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() =>
+                          void handleUpdateAvatar({ familiar: fam.id })
+                        }
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/30 border-white/10 opacity-55'
+                        }`}
+                      >
+                        {imgUrl ? (
+                          <img
+                            src={imgUrl}
+                            alt={fam.name}
+                            className="w-9 h-9 rounded-full object-cover border border-[#d4af37]/70 shrink-0"
+                          />
+                        ) : (
+                          <span className="w-9 h-9 rounded-full bg-black/35 border border-[#d4af37]/40 flex items-center justify-center text-sm shrink-0">
+                            🎵
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/70'
+                            }`}
+                          >
+                            {fam.name}
+                          </p>
+                          <p
+                            className={`text-[9px] truncate ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {equipped
+                              ? '✓ Companion'
+                              : unlocked
+                                ? fam.unlockHint
+                                : `🔒 ${fam.unlockHint}`}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Dice Skin Grid (#28) */}
               {bardCat === 'dice' && (

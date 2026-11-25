@@ -5,6 +5,9 @@ export type BardCosmeticSlot = 'hat' | 'cloak' | 'prop' | 'frame';
 export type BardPortraitId =
   | 'busker'
   | 'minstrel'
+  | 'base_male'
+  | 'base_female'
+  | 'base_nonbinary'
   | 'baroque'
   | 'clockwork'
   | 'arcane'
@@ -27,6 +30,9 @@ export type BardPortraitMeta = {
 export const BARD_PORTRAITS: readonly BardPortraitMeta[] = [
   { id: 'busker', name: 'Tavern Busker', subtitle: 'Starter • Feathered Cap & Lute', unlockRelics: 0 },
   { id: 'minstrel', name: 'Hooded Minstrel', subtitle: 'Starter • Candlelit Quill & Scroll', unlockRelics: 0 },
+  { id: 'base_male', name: 'Hearthside Troubadour', subtitle: 'Starter • Male Chibi Bard', unlockRelics: 0 },
+  { id: 'base_female', name: 'Auburn Balladeer', subtitle: 'Starter • Female Chibi Bard', unlockRelics: 0 },
+  { id: 'base_nonbinary', name: 'Silver-Leaf Minstrel', subtitle: 'Starter • Non-Binary Chibi Bard', unlockRelics: 0 },
   { id: 'baroque', name: 'Baroque Noble', subtitle: '3 Relics or Velvet Bench Pad', unlockRelics: 3, unlockRelicId: 'velvet_bench' },
   { id: 'clockwork', name: 'Clockwork Tinker', subtitle: '6 Relics or Clockwork Arpeggiator', unlockRelics: 6, unlockRelicId: 'clock_arp' },
   { id: 'arcane', name: 'Arcane Rune-Weaver', subtitle: '12 Relics or Runic Diapason', unlockRelics: 12, unlockRelicId: 'runic_diapason' },
@@ -273,8 +279,49 @@ export function isEpithetUnlocked(
   return true;
 }
 
+export type BardFamiliarId =
+  | 'none'
+  | 'songbird'
+  | 'lute_fox'
+  | 'tavern_cat'
+  | 'scholar_owl'
+  | 'ember_drake'
+  | 'cosmic_sprite';
+
+export type BardFamiliarMeta = {
+  id: BardFamiliarId;
+  name: string;
+  unlockHint: string;
+  unlockRelics?: number;
+  unlockFeat?: RareFeat;
+};
+
+export const BARD_FAMILIARS: readonly BardFamiliarMeta[] = [
+  { id: 'none', name: 'Solo Bard', unlockHint: 'Starter' },
+  { id: 'songbird', name: 'Tavern Songbird', unlockHint: 'Starter', unlockRelics: 0 },
+  { id: 'lute_fox', name: 'Lute Fox Kit', unlockHint: '3 Relics', unlockRelics: 3 },
+  { id: 'tavern_cat', name: 'Ginger Tavern Cat', unlockHint: 'Feat: Encore Virtuoso', unlockFeat: 'grinder5' },
+  { id: 'scholar_owl', name: 'Scroll Owl', unlockHint: '10 Relics', unlockRelics: 10 },
+  { id: 'ember_drake', name: 'Ember Drake Hatchling', unlockHint: 'Feat: Underdog Encore (Nat 1)', unlockFeat: 'nat1_clear' },
+  { id: 'cosmic_sprite', name: 'Astral Fox-Sprite', unlockHint: 'Feat: Mythic Resonance', unlockFeat: 'mythic_relic' },
+] as const;
+
+export function isFamiliarUnlocked(
+  fam: BardFamiliarMeta,
+  ownedRelics: readonly string[],
+  ownedFeats: readonly RareFeat[]
+): boolean {
+  if (fam.id === 'none' || fam.unlockRelics === 0) return true;
+  if (fam.unlockRelics !== undefined && ownedRelics.length < fam.unlockRelics) {
+    return false;
+  }
+  if (fam.unlockFeat && !ownedFeats.includes(fam.unlockFeat)) return false;
+  return true;
+}
+
 export type BardAvatarConfig = {
   portrait?: BardPortraitId;
+  familiar?: BardFamiliarId;
   badgeId?: string | null;
   diceSkin?: DiceSkinId;
   particleSkin?: NoteParticleId;
@@ -317,6 +364,7 @@ export const BARD_SKIN_TONES: readonly SkinToneMeta[] = [
 
 export const DEFAULT_BARD_AVATAR: BardAvatarConfig = {
   portrait: 'busker',
+  familiar: 'none',
   badgeId: null,
   diceSkin: 'tavern_gold',
   particleSkin: 'emerald_spark',
@@ -520,12 +568,21 @@ export function sanitizeBardAvatarConfig(
     }
   }
 
+  let familiar: BardFamiliarId = 'none';
+  if (input?.familiar) {
+    const foundFam = BARD_FAMILIARS.find((f) => f.id === input.familiar);
+    if (foundFam && isFamiliarUnlocked(foundFam, ownedRelics, ownedFeats)) {
+      familiar = foundFam.id;
+    }
+  }
+
   const validSkin = BARD_SKIN_TONES.some((s) => s.id === input?.skinTone)
     ? (input!.skinTone as string)
     : DEFAULT_BARD_AVATAR.skinTone;
 
   return {
     portrait,
+    familiar,
     badgeId,
     diceSkin,
     particleSkin,

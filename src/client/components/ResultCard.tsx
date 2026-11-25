@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
 import type {
   NoteResult,
   PlayerProfile,
@@ -102,10 +103,13 @@ export function ResultCard({
     }
     setCommentState('posting');
     try {
+      const portraitId = profile.bardAvatar.portrait ?? 'busker';
+      const portraitPath =
+        BARD_PORTRAIT_URLS[portraitId] ?? BARD_PORTRAIT_URLS.busker;
       const res = await apiFetch('/api/share-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utcDate }),
+        body: JSON.stringify({ utcDate, portraitPath }),
       });
       if (res.status === 401) {
         setCommentState('signin');

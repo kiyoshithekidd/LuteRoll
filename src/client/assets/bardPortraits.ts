@@ -1,6 +1,9 @@
 import type { BardPortraitId } from '../../shared/cosmetics';
 import bardBuskerUrl from './bards/bard_busker.webp';
 import bardMinstrelUrl from './bards/bard_minstrel.webp';
+import bardBaseMaleUrl from './bards/bard_base_male.webp';
+import bardBaseFemaleUrl from './bards/bard_base_female.webp';
+import bardBaseNonbinaryUrl from './bards/bard_base_nonbinary.webp';
 import bardBaroqueUrl from './bards/bard_baroque.webp';
 import bardClockworkUrl from './bards/bard_clockwork.webp';
 import bardArcaneUrl from './bards/bard_arcane.webp';
@@ -14,6 +17,9 @@ import bardBrutalUrl from './bards/bard_brutal.webp';
 export const BARD_PORTRAIT_URLS: Record<BardPortraitId, string> = {
   busker: bardBuskerUrl,
   minstrel: bardMinstrelUrl,
+  base_male: bardBaseMaleUrl,
+  base_female: bardBaseFemaleUrl,
+  base_nonbinary: bardBaseNonbinaryUrl,
   baroque: bardBaroqueUrl,
   clockwork: bardClockworkUrl,
   arcane: bardArcaneUrl,
