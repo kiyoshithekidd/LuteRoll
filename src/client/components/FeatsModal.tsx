@@ -30,6 +30,7 @@ import nat20SealUrl from '../assets/nat20-seal.webp';
 import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
 import { FAMILIAR_URLS } from '../assets/familiarAssets';
 import { BardAvatar } from './BardAvatar';
+import { FamiliarCompanion } from './FamiliarCompanion';
 
 type FeatsModalProps = {
   profile: PlayerProfile;
@@ -249,6 +250,10 @@ export function FeatsModal({
                     </button>
                   )}
                 </div>
+                <FamiliarCompanion
+                  familiarId={profile.bardAvatar.familiar}
+                  size="md"
+                />
               </div>
 
               {/* Category Pills */}

@@ -7,7 +7,6 @@ import {
   type BardPortraitId,
 } from '../../shared/cosmetics';
 import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
-import { FAMILIAR_URLS } from '../assets/familiarAssets';
 
 type BardAvatarProps = {
   config?: BardAvatarConfig | null | undefined;
@@ -30,14 +29,6 @@ const BADGE_SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg' | 'xl', string> = {
   md: 'w-5 h-5 text-[10px] -bottom-1 -right-1',
   lg: 'w-7 h-7 text-sm -bottom-1 -right-1',
   xl: 'w-7 h-7 text-sm -bottom-1 -right-1',
-};
-
-const FAMILIAR_SIZE_CLASSES: Record<'xs' | 'sm' | 'md' | 'lg' | 'xl', string> = {
-  xs: 'hidden',
-  sm: 'w-4 h-4 -top-0.5 -left-0.5',
-  md: 'w-5 h-5 -top-1 -left-1',
-  lg: 'w-8 h-8 -top-1 -left-1',
-  xl: 'w-9 h-9 -top-1 -left-1',
 };
 
 function resolveBadgeIcon(badgeId?: string | null): string | null {
@@ -73,11 +64,6 @@ export function BardAvatar({
     cfg.useSnoovatar && snoovatarUrl
       ? snoovatarUrl
       : BARD_PORTRAIT_URLS[portraitId];
-
-  const familiarUrl =
-    cfg.familiar && cfg.familiar !== 'none' && cfg.familiar in FAMILIAR_URLS
-      ? FAMILIAR_URLS[cfg.familiar]
-      : null;
 
   const badgeIcon = resolveBadgeIcon(cfg.badgeId);
   const vfxTier = getAuraVfxTier(frame.id);
@@ -116,14 +102,6 @@ export function BardAvatar({
         }}
         className={`relative ${SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208]`}
       />
-      {familiarUrl && size !== 'xs' && (
-        <img
-          src={familiarUrl}
-          alt="Bard Familiar"
-          style={{ borderColor: frame.accentColor }}
-          className={`absolute ${FAMILIAR_SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208] shadow-md`}
-        />
-      )}
       {badgeIcon && (
         <span
           aria-hidden="true"
