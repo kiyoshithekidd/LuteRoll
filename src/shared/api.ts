@@ -179,6 +179,7 @@ export type LeaderboardEntry = {
 export type ShareCommentRequest = {
   utcDate?: string;
   portraitPath?: string;
+  cardImageDataUrl?: string;
 };
 
 export type ShareCommentResponse = {

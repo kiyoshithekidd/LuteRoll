@@ -259,70 +259,94 @@ api.post('/share-comment', async (c) => {
 
     let postedRich = false;
     try {
-      let avatarUrl: string | null = null;
-      if (profile.bardAvatar.useSnoovatar && profile.snoovatarUrl) {
-        avatarUrl = profile.snoovatarUrl;
-      } else if (
-        typeof body.portraitPath === 'string' &&
-        !body.portraitPath.includes('..')
-      ) {
-        if (
-          body.portraitPath.startsWith('/assets/') &&
-          /\.(webp|png|jpg|jpeg)$/i.test(body.portraitPath)
-        ) {
-          const origin = c.req.header('origin');
-          if (
-            origin &&
-            /^https:\/\/[a-z0-9-]+\.(devvit\.net|reddit\.com)$/i.test(origin)
-          ) {
-            avatarUrl = `${origin}${body.portraitPath}`;
-          }
-        } else if (
-          /^https:\/\/[a-z0-9-]+\.(devvit\.net|reddit\.com)\/assets\/[^\s]+\.(webp|png|jpg|jpeg)$/i.test(
-            body.portraitPath
-          )
-        ) {
-          avatarUrl = body.portraitPath;
-        }
-      }
+      let mediaUrl: string | undefined;
 
-      if (avatarUrl) {
-        const cacheKey = `media:avatar:url:${avatarUrl}`;
-        let mediaUrl = await redis.get(cacheKey);
-        if (!mediaUrl) {
+      // 1) Prefer the composite Bard + Familiar + Aura + Crest Pin banner PNG
+      if (
+        typeof body.cardImageDataUrl === 'string' &&
+        body.cardImageDataUrl.startsWith('data:image/png;base64,') &&
+        body.cardImageDataUrl.length < 300_000
+      ) {
+        try {
           const uploaded = await media.upload({
-            url: avatarUrl,
+            url: body.cardImageDataUrl,
             type: 'image',
           });
           mediaUrl = uploaded.mediaUrl;
-          if (mediaUrl) {
-            await redis.set(cacheKey, mediaUrl, {
-              expiration: new Date(Date.now() + 7 * 86_400_000),
-            });
-          }
-        }
-        if (mediaUrl) {
-          const rt = new RichTextBuilder()
-            .image({ mediaUrl, caption: `${player.username}'s Bard` })
-            .paragraph((p) =>
-              p.text({
-                text: `u/${player.username}`,
-                formatting: [[1, 0, player.username.length + 2]],
-              })
-            );
-          for (const line of formattedCard.split('  \n')) {
-            if (line.trim().length > 0) {
-              rt.paragraph((p) => p.text({ text: line }));
-            }
-          }
-          await reddit.submitComment({
-            id: postId,
-            richtext: rt,
-          });
-          postedRich = true;
+        } catch (err) {
+          console.error('share-comment composite media.upload failed:', err);
         }
       }
-    } catch {
+
+      // 2) Fallback to static portrait / Snoovatar URL if composite upload failed
+      if (!mediaUrl) {
+        let avatarUrl: string | null = null;
+        if (profile.bardAvatar.useSnoovatar && profile.snoovatarUrl) {
+          avatarUrl = profile.snoovatarUrl;
+        } else if (
+          typeof body.portraitPath === 'string' &&
+          !body.portraitPath.includes('..')
+        ) {
+          if (
+            body.portraitPath.startsWith('/assets/') &&
+            /\.(webp|png|jpg|jpeg)$/i.test(body.portraitPath)
+          ) {
+            const origin = c.req.header('origin');
+            if (
+              origin &&
+              /^https:\/\/[a-z0-9-]+\.(devvit\.net|reddit\.com)$/i.test(origin)
+            ) {
+              avatarUrl = `${origin}${body.portraitPath}`;
+            }
+          } else if (
+            /^https:\/\/[a-z0-9-]+\.(devvit\.net|reddit\.com)\/assets\/[^\s]+\.(webp|png|jpg|jpeg)$/i.test(
+              body.portraitPath
+            )
+          ) {
+            avatarUrl = body.portraitPath;
+          }
+        }
+
+        if (avatarUrl) {
+          const cacheKey = `media:avatar:url:${avatarUrl}`;
+          mediaUrl = (await redis.get(cacheKey)) ?? undefined;
+          if (!mediaUrl) {
+            const uploaded = await media.upload({
+              url: avatarUrl,
+              type: 'image',
+            });
+            mediaUrl = uploaded.mediaUrl;
+            if (mediaUrl) {
+              await redis.set(cacheKey, mediaUrl, {
+                expiration: new Date(Date.now() + 7 * 86_400_000),
+              });
+            }
+          }
+        }
+      }
+
+      if (mediaUrl) {
+        const rt = new RichTextBuilder()
+          .image({ mediaUrl, caption: `${player.username}'s Bard` })
+          .paragraph((p) =>
+            p.text({
+              text: `u/${player.username}`,
+              formatting: [[1, 0, player.username.length + 2]],
+            })
+          );
+        for (const line of formattedCard.split('  \n')) {
+          if (line.trim().length > 0) {
+            rt.paragraph((p) => p.text({ text: line }));
+          }
+        }
+        await reddit.submitComment({
+          id: postId,
+          richtext: rt,
+        });
+        postedRich = true;
+      }
+    } catch (err) {
+      console.error('share-comment rich comment failed:', err);
       postedRich = false;
     }
 
