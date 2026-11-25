@@ -17,6 +17,7 @@ import { formatBardFlairText } from '../src/server/flairService';
 import type { PlayerProfile } from '../src/shared/api';
 import {
   BARD_EPITHETS,
+  BARD_FAMILIARS,
   DEFAULT_BARD_AVATAR,
   DICE_SKINS,
   getCosmeticForFeat,
@@ -281,6 +282,15 @@ describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
     assert.equal(unlocked.diceSkin, 'obsidian_crimson');
     assert.equal(unlocked.particleSkin, 'ember_spark');
     assert.equal(unlocked.epithet, 'nat20_magnet');
+
+    assert.ok(BARD_FAMILIARS.length >= 7);
+    const baseMale = sanitizeBardAvatarConfig({ portrait: 'base_male', familiar: 'ember_drake' }, [], []);
+    assert.equal(baseMale.portrait, 'base_male');
+    assert.equal(baseMale.familiar, 'none');
+
+    const drakeUnlocked = sanitizeBardAvatarConfig({ portrait: 'base_nonbinary', familiar: 'ember_drake' }, [], ['nat1_clear']);
+    assert.equal(drakeUnlocked.portrait, 'base_nonbinary');
+    assert.equal(drakeUnlocked.familiar, 'ember_drake');
   });
 
   it('produces deterministic, tiered performance commentary across outcomes', () => {

@@ -11,6 +11,7 @@ import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
 import { BardAvatar } from './components/BardAvatar';
+import { FamiliarCompanion } from './components/FamiliarCompanion';
 import { trackAppReady } from './telemetry';
 
 function getUtcResetCountdown(): string {
@@ -102,26 +103,43 @@ export const Splash = () => {
           </div>
         </div>
 
-        {/* #27: Hero Bard Avatar on Homepage (clickable to open Vault/Editor) */}
-        <div className="relative flex items-center justify-center select-none">
+        {/* #27: Hero Bard Avatar + Side-by-Side Familiar on Homepage */}
+        <div className="relative flex items-center justify-center gap-3 select-none">
           {state ? (
-            <button
-              type="button"
-              onClick={(e) => openModalInExpandedMode(e, 'vault')}
-              className="relative cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
-              title="Customize your Bard, Skins & Trophies"
-            >
-              <BardAvatar
-                config={state.profile.bardAvatar}
-                snoovatarUrl={state.profile.snoovatarUrl}
-                size="xl"
-              />
-              {finalRoll !== null && (
-                <span className="absolute -bottom-1 -left-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
-                  d20: {finalRoll}
-                </span>
-              )}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={(e) => openModalInExpandedMode(e, 'vault')}
+                className="relative cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
+                title="Customize your Bard, Skins & Trophies"
+              >
+                <BardAvatar
+                  config={state.profile.bardAvatar}
+                  snoovatarUrl={state.profile.snoovatarUrl}
+                  size="xl"
+                />
+                {finalRoll !== null && (
+                  <span className="absolute -bottom-1 -left-1 px-2 py-0.5 rounded-full bg-[#1c1208] border border-[#ffe875] font-serif text-xs font-bold text-[#ffe875] shadow">
+                    d20: {finalRoll}
+                  </span>
+                )}
+              </button>
+              {state.profile.bardAvatar.familiar &&
+                state.profile.bardAvatar.familiar !== 'none' && (
+                  <button
+                    type="button"
+                    onClick={(e) => openModalInExpandedMode(e, 'vault')}
+                    className="cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
+                    title="Change Familiar in Tavern Vault"
+                  >
+                    <FamiliarCompanion
+                      familiarId={state.profile.bardAvatar.familiar}
+                      size="lg"
+                      showLabel
+                    />
+                  </button>
+                )}
+            </>
           ) : (
             <div className="relative flex items-center justify-center w-24 h-24 animate-gold-pulse rounded-full">
               <img

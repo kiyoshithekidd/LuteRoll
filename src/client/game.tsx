@@ -45,6 +45,7 @@ import tomatoSplatUrl from './assets/tomato-splat.webp';
 import nat20SealUrl from './assets/nat20-seal.webp';
 import { soundEngine } from './audio/soundEngine';
 import { BardAvatar } from './components/BardAvatar';
+import { FamiliarCompanion } from './components/FamiliarCompanion';
 import { FeatsModal } from './components/FeatsModal';
 import { Keyboard, type KeyFeedbackState } from './components/Keyboard';
 import { LeaderboardModal } from './components/LeaderboardModal';
@@ -1014,18 +1015,25 @@ export const Game = () => {
         {phase === 'LISTEN' && melody && tier && (
           <div className="tavern-wood-frame w-full rounded-2xl p-3.5 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ffe875] text-[#1c1208] shadow">
-                    Rolled {finalRoll}
-                  </span>
-                  <span className="text-sm font-bold text-[#ffe875]">
-                    {tier.name} • {tier.xpMultiplier}x XP
-                  </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <FamiliarCompanion
+                  familiarId={state?.profile.bardAvatar.familiar}
+                  size="sm"
+                  mood={effectiveRoll === 20 ? 'cheer' : 'idle'}
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#ffe875] text-[#1c1208] shadow">
+                      Rolled {finalRoll}
+                    </span>
+                    <span className="text-sm font-bold text-[#ffe875] truncate">
+                      {tier.name} • {tier.xpMultiplier}x XP
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#f5ead2]/80 mt-0.5">
+                    {melody.notes.length} notes • Highlighted keys are in play
+                  </p>
                 </div>
-                <p className="text-xs text-[#f5ead2]/80 mt-0.5">
-                  {melody.notes.length} notes • Highlighted keys are in play
-                </p>
               </div>
               {state && !state.daily.rerollUsed && (
                 <button
@@ -1167,10 +1175,17 @@ export const Game = () => {
         {phase === 'PLAY' && melody && tier && (
           <div className="tavern-wood-frame w-full rounded-2xl p-3.5 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between text-xs gap-2">
-              <span className="font-bold text-[#ffe875]">
-                Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
-                {melody.notes.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <FamiliarCompanion
+                  familiarId={state?.profile.bardAvatar.familiar}
+                  size="sm"
+                  mood={comboStreak >= 3 ? 'cheer' : 'idle'}
+                />
+                <span className="font-bold text-[#ffe875]">
+                  Note {Math.min(playIdx + 1, melody.notes.length)} of{' '}
+                  {melody.notes.length}
+                </span>
+              </div>
               <div className="flex items-center gap-1.5">
                 {comboStreak >= 3 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/25 border border-amber-300/70 text-[#ffe875]">
@@ -1272,7 +1287,7 @@ export const Game = () => {
                       ) : (
                         <div className="text-3xl shrink-0">🎶</div>
                       )}
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h2 className="font-serif text-lg sm:text-xl font-bold text-[#ffe875] leading-tight">
                           {commentary.headline}
                         </h2>
@@ -1292,6 +1307,11 @@ export const Game = () => {
                           )}
                         </p>
                       </div>
+                      <FamiliarCompanion
+                        familiarId={lastResult.profile.bardAvatar.familiar}
+                        size="md"
+                        mood="cheer"
+                      />
                     </div>
                     {lastResult.gauntletVerdict && (
                       <div
@@ -1367,7 +1387,7 @@ export const Game = () => {
                       alt="Tomatoes Thrown"
                       className="w-11 h-11 rounded-full object-cover border-2 border-red-400/70 shadow-md shrink-0"
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h2 className="font-serif text-lg sm:text-xl font-bold text-red-300 leading-tight">
                         {commentary.headline}
                       </h2>
@@ -1382,6 +1402,11 @@ export const Game = () => {
                           : '0 XP'}
                       </p>
                     </div>
+                    <FamiliarCompanion
+                      familiarId={lastResult.profile.bardAvatar.familiar}
+                      size="md"
+                      mood="tomato"
+                    />
                   </div>
                 )}
 

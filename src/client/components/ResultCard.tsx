@@ -1,11 +1,186 @@
 import { useState } from 'react';
+import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
+import { FAMILIAR_URLS } from '../assets/familiarAssets';
 import type {
   NoteResult,
   PlayerProfile,
   ShareCommentResponse,
 } from '../../shared/api';
+import { FEAT_CATALOG, RELIC_CATALOG } from '../../shared/constants';
+import {
+  BARD_COSMETICS,
+  BARD_EPITHETS,
+  DEFAULT_BARD_AVATAR,
+  getAuraVfxTier,
+} from '../../shared/cosmetics';
 import { formatResultCardText } from '../../shared/resultCard';
 import { apiFetch } from '../apiClient';
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function resolvePinEmoji(badgeId?: string | null): string | null {
+  if (!badgeId) return null;
+  if (badgeId.startsWith('relic:')) {
+    return RELIC_CATALOG.find((r) => r.id === badgeId.slice(6))?.icon ?? null;
+  }
+  if (badgeId.startsWith('feat:')) {
+    return FEAT_CATALOG.find((f) => f.id === badgeId.slice(5))?.icon ?? null;
+  }
+  return null;
+}
+
+async function buildShareBannerDataUrl(
+  profile: PlayerProfile,
+  roll: number,
+  accuracy: number
+): Promise<string | undefined> {
+  try {
+    const w = 360;
+    const h = 132;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+
+    // Warm dark tavern wood backdrop
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, '#2c180b');
+    bg.addColorStop(0.55, '#190e07');
+    bg.addColorStop(1, '#0d261a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Gold tavern border
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
+
+    const cfg = profile.bardAvatar;
+    const frame =
+      BARD_COSMETICS.find((c) => c.slot === 'frame' && c.id === cfg.frame) ??
+      BARD_COSMETICS.find((c) => c.id === DEFAULT_BARD_AVATAR.frame)!;
+    const vfxTier = getAuraVfxTier(frame.id);
+
+    const portraitId = cfg.portrait ?? 'busker';
+    const localPortraitUrl =
+      BARD_PORTRAIT_URLS[portraitId] ?? BARD_PORTRAIT_URLS.busker;
+    const familiarUrl =
+      cfg.familiar && cfg.familiar !== 'none' && cfg.familiar in FAMILIAR_URLS
+        ? FAMILIAR_URLS[cfg.familiar]
+        : null;
+
+    const [portraitImg, familiarImg] = await Promise.all([
+      loadImage(localPortraitUrl),
+      familiarUrl ? loadImage(familiarUrl) : Promise.resolve(null),
+    ]);
+
+    // Draw Bard Avatar with Aura ring
+    const bx = 60;
+    const by = h / 2;
+    const br = 42;
+    if (vfxTier !== 'base') {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, by, br + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = frame.accentColor;
+      ctx.lineWidth = vfxTier === 'mythic' ? 3 : 2;
+      if (vfxTier === 'mythic') ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (portraitImg) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(portraitImg, bx - br, by - br, br * 2, br * 2);
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI * 2);
+    ctx.strokeStyle = frame.accentColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Crest Pin badge
+    const pin = resolvePinEmoji(cfg.badgeId);
+    if (pin) {
+      ctx.beginPath();
+      ctx.arc(bx + 30, by + 30, 14, 0, Math.PI * 2);
+      ctx.fillStyle = '#1c1208';
+      ctx.fill();
+      ctx.strokeStyle = frame.accentColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pin, bx + 30, by + 31);
+    }
+
+    // Draw Familiar Companion side-by-side
+    let textX = 118;
+    if (familiarImg) {
+      const fx = 136;
+      const fy = h / 2 + 8;
+      const fr = 28;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(familiarImg, fx - fr, fy - fr, fr * 2, fr * 2);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      textX = 176;
+    }
+
+    // Bard info text
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#ffe875';
+    ctx.font = 'bold 16px Georgia, serif';
+    ctx.fillText(`u/${profile.username}`.slice(0, 20), textX, 24);
+
+    ctx.fillStyle = '#f5ead2';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`Lvl ${profile.level} ${profile.title}`.slice(0, 24), textX, 48);
+
+    const epMeta =
+      cfg.epithet && cfg.epithet !== 'none'
+        ? BARD_EPITHETS.find((e) => e.id === cfg.epithet)
+        : null;
+    if (epMeta) {
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'italic 11px Georgia, serif';
+      ctx.fillText(`"${epMeta.label}"`, textX, 68);
+    }
+
+    ctx.fillStyle = '#6ee7b7';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(
+      `d20: ${roll} • ${Math.round(accuracy * 100)}% • 🔥${profile.streak}`,
+      textX,
+      92
+    );
+
+    return canvas.toDataURL('image/png');
+  } catch {
+    return undefined;
+  }
+}
 
 type ResultCardProps = {
   utcDate: string;
@@ -102,10 +277,18 @@ export function ResultCard({
     }
     setCommentState('posting');
     try {
+      const portraitId = profile.bardAvatar.portrait ?? 'busker';
+      const portraitPath =
+        BARD_PORTRAIT_URLS[portraitId] ?? BARD_PORTRAIT_URLS.busker;
+      const cardImageDataUrl = await buildShareBannerDataUrl(
+        profile,
+        roll,
+        accuracy
+      );
       const res = await apiFetch('/api/share-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utcDate }),
+        body: JSON.stringify({ utcDate, portraitPath, cardImageDataUrl }),
       });
       if (res.status === 401) {
         setCommentState('signin');

@@ -9,6 +9,7 @@ import {
   type NoteParticleMeta,
 } from '../../shared/cosmetics';
 import { midiToNoteName } from '../../shared/melodyGenerator';
+import { KEYBOARD_DECK_TEXTURES } from '../assets/deckTextures';
 
 export type KeyFeedbackState = 'playback' | 'correct' | 'wrong' | null;
 
@@ -303,8 +304,19 @@ export function Keyboard({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [disabled, onKeyPress]);
 
+  const deckTextureUrl = KEYBOARD_DECK_TEXTURES[voiceId];
+
   return (
     <div
+      style={
+        deckTextureUrl
+          ? {
+              backgroundImage: `linear-gradient(rgba(10, 7, 4, 0.36), rgba(10, 7, 4, 0.48)), url(${deckTextureUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }
+          : undefined
+      }
       className={`w-full rounded-xl p-2.5 border shadow-inner transition-colors duration-300 ${skin.trayClass}`}
     >
       <div className="w-full flex flex-col gap-2">
