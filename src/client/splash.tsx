@@ -1,18 +1,16 @@
 import './index.css';
 
 import { context, requestExpandedMode } from '@devvit/web/client';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { KeyboardVoiceId, StateResponse } from '../shared/api';
+import type { StateResponse } from '../shared/api';
 import { getTierForRoll } from '../shared/constants';
-import type { BardAvatarConfig } from '../shared/cosmetics';
 import { apiFetch } from './apiClient';
 import { soundEngine } from './audio/soundEngine';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
 import { TavernGuideModal } from './components/TavernGuideModal';
-import { FeatsModal } from './components/FeatsModal';
 import { BardAvatar } from './components/BardAvatar';
 import { trackAppReady } from './telemetry';
 
@@ -42,7 +40,6 @@ function formatShortUtcDate(utcDate: string): string {
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
   const [showGuide, setShowGuide] = useState(false);
-  const [showVault, setShowVault] = useState(false);
 
   useEffect(() => {
     trackAppReady();
@@ -61,27 +58,13 @@ export const Splash = () => {
     };
   }, []);
 
-  const handleSelectVoice = async (voiceId: KeyboardVoiceId) => {
-    const res = await apiFetch('/api/voice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voiceId }),
-    });
-    if (!res.ok) return;
-    const data = (await res.json()) as { profile: StateResponse['profile'] };
-    soundEngine.setVoice(data.profile.selectedVoice);
-    setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
-  };
-
-  const handleSaveAvatar = async (bardAvatar: BardAvatarConfig) => {
-    const res = await apiFetch('/api/avatar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bardAvatar }),
-    });
-    if (!res.ok) return;
-    const data = (await res.json()) as { profile: StateResponse['profile'] };
-    setState((prev) => (prev ? { ...prev, profile: data.profile } : prev));
+  const openVaultInExpandedMode = (e: MouseEvent<HTMLButtonElement>) => {
+    try {
+      localStorage.setItem('luteroll_open_vault_at', String(Date.now()));
+    } catch {
+      // ignore storage errors
+    }
+    requestExpandedMode(e.nativeEvent, 'game');
   };
 
   const username =
@@ -120,7 +103,7 @@ export const Splash = () => {
           {state ? (
             <button
               type="button"
-              onClick={() => setShowVault(true)}
+              onClick={openVaultInExpandedMode}
               className="relative cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
               title="Customize your Bard, Skins & Trophies"
             >
@@ -199,7 +182,7 @@ export const Splash = () => {
           {state && (
             <button
               type="button"
-              onClick={() => setShowVault(true)}
+              onClick={openVaultInExpandedMode}
               className="px-3 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
               title="Customize Bard, Skins, Relics & Feats"
             >
@@ -225,14 +208,6 @@ export const Splash = () => {
       </section>
 
       {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
-      {showVault && state && (
-        <FeatsModal
-          profile={state.profile}
-          onSelectVoice={handleSelectVoice}
-          onSaveAvatar={handleSaveAvatar}
-          onClose={() => setShowVault(false)}
-        />
-      )}
     </main>
   );
 };

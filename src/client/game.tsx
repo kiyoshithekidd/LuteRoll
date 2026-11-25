@@ -167,6 +167,17 @@ export const Game = () => {
         setState(data);
         soundEngine.setVoice(data.profile.selectedVoice);
         setPhase(data.daily.finalRoll !== null ? 'LISTEN' : 'ROLL');
+        try {
+          const raw = localStorage.getItem('luteroll_open_vault_at');
+          if (raw) {
+            localStorage.removeItem('luteroll_open_vault_at');
+            if (Date.now() - Number(raw) < 15_000) {
+              setShowFeats(true);
+            }
+          }
+        } catch {
+          // ignore storage errors
+        }
       })
       .catch(() => {
         if (active) setError('Could not reach the Tavern Keeper.');
