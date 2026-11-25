@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { context, reddit } from '@devvit/web/server';
+import { getIsoWeekKey } from '../../shared/constants';
 import {
   getDailyPostId,
+  getLastWeekHeadliner,
   getUtcDateKey,
   getYesterdayRecap,
   getYesterdayUtcKey,
@@ -51,13 +53,24 @@ cron.post('/daily-post', async (c) => {
       // Non-fatal if sticky slot or permission is unavailable
     }
 
-    // Post a pinned Yesterday's Headliner Bard recap comment if anyone played yesterday
+    // Post a pinned Yesterday's Headliner Bard recap comment (+ Monday Weekly Spotlight #34)
     try {
       const recap = await getYesterdayRecap(yesterdayUtc);
-      if (recap.topBard || recap.rollersCount > 0) {
+      const isMondayUtc = now.getUTCDay() === 1;
+      const lastWeekKey = getIsoWeekKey(new Date(now.getTime() - 86_400_000));
+      const weeklyHeadliner = isMondayUtc
+        ? await getLastWeekHeadliner(lastWeekKey).catch(() => null)
+        : null;
+
+      if (recap.topBard || recap.rollersCount > 0 || weeklyHeadliner) {
         const lines: string[] = [
           `**📜 Yesterday's Tavern Ledger (${yesterdayUtc})**`,
         ];
+        if (weeklyHeadliner) {
+          lines.push(
+            `🏆 **Last Week's Grand Headliner (${lastWeekKey}):** u/${weeklyHeadliner.username} (${weeklyHeadliner.score.toLocaleString()} Weekly XP)`
+          );
+        }
         if (recap.topBard) {
           lines.push(
             `👑 **Headliner Bard:** u/${recap.topBard.username} (${recap.topBard.score.toLocaleString()} XP)`

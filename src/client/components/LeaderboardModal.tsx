@@ -137,9 +137,16 @@ export function LeaderboardModal({ onClose }: LeaderboardModalProps) {
                       snoovatarUrl={entry.snoovatarUrl}
                       size="xs"
                     />
-                    <span className="font-semibold truncate text-[#1c1208]">
-                      u/{entry.username}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="font-semibold truncate block text-[#1c1208]">
+                        u/{entry.username}
+                      </span>
+                      {entry.epithet && (
+                        <span className="text-[9px] font-bold text-[#6e4726] uppercase tracking-wider">
+                          {entry.epithet}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="font-bold text-[#4a2e16] shrink-0">
                     {entry.score.toLocaleString()} XP

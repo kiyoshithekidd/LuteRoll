@@ -1,5 +1,6 @@
 import type { NoteResult, PlayerProfile } from './api';
 import { getTierForRoll } from './constants';
+import { BARD_EPITHETS } from './cosmetics';
 
 export type ResultCardFormatInput = {
   utcDate: string;
@@ -8,7 +9,9 @@ export type ResultCardFormatInput = {
   xpEarned: number;
   passed: boolean;
   noteResults?: NoteResult[] | undefined;
-  profile: Pick<PlayerProfile, 'streak' | 'level' | 'title'>;
+  profile: Pick<PlayerProfile, 'streak' | 'level' | 'title'> & {
+    bardAvatar?: PlayerProfile['bardAvatar'];
+  };
   forRedditMarkdown?: boolean;
 };
 
@@ -70,8 +73,14 @@ export function formatResultCardText(input: ResultCardFormatInput): string {
     );
   }
 
+  const epId = profile.bardAvatar?.epithet;
+  const epLabel =
+    epId && epId !== 'none'
+      ? BARD_EPITHETS.find((e) => e.id === epId)?.label
+      : undefined;
+
   lines.push(
-    `🔥 Streak ${profile.streak} • Lvl ${profile.level} ${profile.title}`
+    `🔥 Streak ${profile.streak} • Lvl ${profile.level} ${profile.title}${epLabel ? ` "${epLabel}"` : ''}`
   );
 
   return lines.join(lineBreak);

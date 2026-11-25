@@ -8,12 +8,18 @@ import {
 } from '../../shared/constants';
 import {
   BARD_COSMETICS,
+  BARD_EPITHETS,
   BARD_PORTRAITS,
+  DICE_SKINS,
   getCosmeticForFeat,
   getCosmeticForRelic,
   isCosmeticUnlocked,
+  isDiceSkinUnlocked,
+  isEpithetUnlocked,
+  isParticleSkinUnlocked,
   isPortraitUnlocked,
   KEYBOARD_SKIN_THEMES,
+  NOTE_PARTICLE_SKINS,
   type BardAvatarConfig,
 } from '../../shared/cosmetics';
 import { soundEngine } from '../audio/soundEngine';
@@ -30,7 +36,7 @@ type FeatsModalProps = {
 };
 
 type VaultTab = 'relics' | 'voices' | 'bard' | 'feats';
-type BardCategory = 'portrait' | 'frame' | 'badge';
+type BardCategory = 'portrait' | 'frame' | 'dice' | 'sparks' | 'epithet' | 'badge';
 
 const RARITY_STYLES: Record<
   'common' | 'uncommon' | 'rare' | 'mythic',
@@ -191,7 +197,11 @@ export function FeatsModal({
         </div>
 
         {/* Tab Content */}
-        <div className="overflow-y-auto space-y-2.5 pr-0.5 flex-1">
+        <div
+          className="overflow-y-auto min-h-0 overscroll-contain touch-pan-y space-y-2.5 pr-0.5 flex-1"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {tab === 'bard' && (
             <>
               {/* Live Illustrated Bard Preview */}
@@ -231,12 +241,15 @@ export function FeatsModal({
                 </div>
               </div>
 
-              {/* 3 Clean Category Pills */}
+              {/* Category Pills */}
               <div className="grid grid-cols-3 gap-1.5">
                 {(
                   [
-                    ['portrait', '🎭 Bards (11)'],
-                    ['frame', '✨ Aura Rings'],
+                    ['portrait', '🎭 Bards'],
+                    ['frame', '✨ Auras'],
+                    ['dice', '🎲 d20 Skins'],
+                    ['sparks', '✦ Sparks'],
+                    ['epithet', '🏷️ Epithet'],
                     ['badge', '📌 Crest Pin'],
                   ] as const
                 ).map(([cat, label]) => (
@@ -254,6 +267,190 @@ export function FeatsModal({
                   </button>
                 ))}
               </div>
+
+              {/* Dice Skin Grid (#28) */}
+              {bardCat === 'dice' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DICE_SKINS.map((d) => {
+                    const unlocked = isDiceSkinUnlocked(
+                      d,
+                      profile.relics,
+                      profile.feats,
+                      profile.streak
+                    );
+                    const equipped =
+                      (profile.bardAvatar.diceSkin ?? 'tavern_gold') === d.id;
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() =>
+                          void handleUpdateAvatar({ diceSkin: d.id })
+                        }
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span
+                          className="w-7 h-7 rounded-full border shrink-0 flex items-center justify-center text-[10px] font-bold"
+                          style={{
+                            background: `radial-gradient(circle, ${d.gradInner}, ${d.gradMid}, ${d.gradOuter})`,
+                            borderColor: d.ringColor,
+                            color: d.numColor,
+                          }}
+                        >
+                          {unlocked ? '20' : '🔒'}
+                        </span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/75'
+                            }`}
+                          >
+                            {d.name}
+                          </p>
+                          <p
+                            className={`text-[9px] truncate ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {equipped ? '✓ Active' : d.unlockHint}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Note Sparks Grid (#30) */}
+              {bardCat === 'sparks' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {NOTE_PARTICLE_SKINS.map((sp) => {
+                    const unlocked = isParticleSkinUnlocked(
+                      sp,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped =
+                      (profile.bardAvatar.particleSkin ?? 'emerald_spark') ===
+                      sp.id;
+                    return (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() =>
+                          void handleUpdateAvatar({ particleSkin: sp.id })
+                        }
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="w-7 h-7 rounded-full bg-[#1c1208] border border-[#d4af37] shrink-0 flex items-center justify-center text-sm">
+                          {unlocked ? sp.symbol : '🔒'}
+                        </span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/75'
+                            }`}
+                          >
+                            {sp.name}
+                          </p>
+                          <p
+                            className={`text-[9px] truncate ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {equipped ? '✓ Active' : sp.unlockHint}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Epithet Grid (#29) */}
+              {bardCat === 'epithet' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {BARD_EPITHETS.map((ep) => {
+                    const unlocked = isEpithetUnlocked(
+                      ep,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped =
+                      (profile.bardAvatar.epithet ?? 'none') === ep.id;
+                    return (
+                      <button
+                        key={ep.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() =>
+                          void handleUpdateAvatar({ epithet: ep.id })
+                        }
+                        className={`rounded-xl p-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <p
+                          className={`text-[11px] font-bold truncate ${
+                            equipped
+                              ? 'text-[#ffe875]'
+                              : unlocked
+                                ? 'text-[#1c1208]'
+                                : 'text-[#f5ead2]/75'
+                          }`}
+                        >
+                          {unlocked ? ep.label : `🔒 ${ep.label}`}
+                        </p>
+                        <p
+                          className={`text-[9px] truncate ${
+                            equipped
+                              ? 'text-[#ffe875]/80'
+                              : unlocked
+                                ? 'text-[#6e4726]'
+                                : 'text-[#f5ead2]/55'
+                          }`}
+                        >
+                          {equipped ? '✓ Equipped' : ep.unlockHint}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Illustrated Chibi Bard Portrait Grid */}
               {bardCat === 'portrait' && (

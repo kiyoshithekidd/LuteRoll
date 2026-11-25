@@ -17,12 +17,16 @@ import {
   xpRequiredForLevel,
 } from '../shared/constants';
 import {
+  BARD_EPITHETS,
   sanitizeBardAvatarConfig,
   type BardAvatarConfig,
 } from '../shared/cosmetics';
 import { cyrb128 } from '../shared/prng';
 import type {
   DailyState,
+  EncoreMode,
+  GauntletChallenge,
+  GauntletVerdict,
   KeyboardVoiceId,
   LeaderboardBoard,
   LeaderboardEntry,
@@ -170,7 +174,7 @@ export async function getPlayerProfile(
       parsedBard = null;
     }
   }
-  const bardAvatar = sanitizeBardAvatarConfig(parsedBard, relics, feats);
+  const bardAvatar = sanitizeBardAvatarConfig(parsedBard, relics, feats, streak);
 
   return {
     username,
@@ -195,6 +199,12 @@ export async function getDailyState(
   utcDate = getUtcDateKey()
 ): Promise<DailyState> {
   const data = await redis.hGetAll(dailyKey(playerKey, utcDate));
+  const rawMilestone = data.milestoneChestTier;
+  const milestoneChestTier: 'unowned' | 'mythic' | null =
+    rawMilestone === 'mythic' || rawMilestone === 'unowned'
+      ? rawMilestone
+      : null;
+
   return {
     utcDate,
     initialRoll: data.initialRoll ? parseInt(data.initialRoll, 10) : null,
@@ -208,6 +218,7 @@ export async function getDailyState(
     chestsEarned: data.chestsEarned ? parseInt(data.chestsEarned, 10) : 0,
     chestsOpened: data.chestsOpened ? parseInt(data.chestsOpened, 10) : 0,
     bountyClaimed: data.bountyClaimed === '1',
+    milestoneChestTier,
   };
 }
 
@@ -320,7 +331,9 @@ export async function submitAttempt(
   snoovatarUrl?: string | null,
   graceUsed = false,
   rawNoteResults?: NoteResult[],
-  requestedUtcDate?: string
+  requestedUtcDate?: string,
+  encoreMode: EncoreMode = 'standard',
+  gauntletId?: string
 ): Promise<SubmitAttemptResponse> {
   const accuracy = Math.max(0, Math.min(1, rawAccuracy));
   const now = new Date();
@@ -333,10 +346,7 @@ export async function submitAttempt(
   // allow submitting against yesterday's rolled daily state when today has no roll yet.
   let targetUtcDate = todayUtc;
   let daily = await getDailyState(playerKey, todayUtc);
-  if (
-    daily.finalRoll === null &&
-    requestedUtcDate === yesterdayUtc
-  ) {
+  if (daily.finalRoll === null && requestedUtcDate === yesterdayUtc) {
     const prevDaily = await getDailyState(playerKey, yesterdayUtc);
     if (prevDaily.finalRoll !== null) {
       targetUtcDate = yesterdayUtc;
@@ -344,10 +354,23 @@ export async function submitAttempt(
     }
   }
 
-  if (daily.finalRoll === null) {
+  let gauntlet: GauntletChallenge | null = null;
+  if (gauntletId) {
+    const rawG = await redis.get(`gauntlet:${gauntletId}`).catch(() => null);
+    if (rawG) {
+      try {
+        gauntlet = JSON.parse(rawG) as GauntletChallenge;
+      } catch {
+        gauntlet = null;
+      }
+    }
+  }
+
+  if (daily.finalRoll === null && !gauntlet) {
     throw new Error('Roll the d20 before submitting an attempt');
   }
 
+  const activeRoll = gauntlet ? gauntlet.roll : daily.finalRoll!;
   const dKey = dailyKey(playerKey, targetUtcDate);
   const [profile, rawDailyHash, currentStats] = await Promise.all([
     getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
@@ -356,7 +379,7 @@ export async function submitAttempt(
   ]);
 
   // B3 fix: enforce a minimum plausible elapsed time between runs to prevent script XP farming
-  const tier = getTierForRoll(daily.finalRoll);
+  const tier = getTierForRoll(activeRoll);
   const minRunDurationMs = Math.max(800, tier.minNotes * 110);
   const lastActivityMs = Math.max(
     rawDailyHash.lastAttemptAt ? parseInt(rawDailyHash.lastAttemptAt, 10) : 0,
@@ -372,11 +395,37 @@ export async function submitAttempt(
     ? Math.round(BASE_XP_PER_RUN * tier.xpMultiplier * accuracy)
     : 0;
 
+  // Encore Challenge (#31): +50% XP (1.5x) for post-clear No-Lights or Fast Tempo mode
+  const encoreActiveForRun =
+    passed && daily.clearsCount >= 1 && encoreMode !== 'standard';
+  const encoreChallengeBonusXp = encoreActiveForRun
+    ? Math.round(baseXpEarned * 0.5)
+    : 0;
+
   // Community Co-Op Tavern Tip Jar Encore Buff (+15% XP when subreddit daily goal is met)
   const encoreBonusXp =
     passed && currentStats.encoreActive
       ? Math.round(baseXpEarned * ENCORE_XP_BONUS_RATE)
       : 0;
+
+  // Bardic Gauntlet (#32) head-to-head verdict
+  let gauntletVerdict: GauntletVerdict | null = null;
+  let gauntletBonusXp = 0;
+  if (gauntlet) {
+    const won = passed && accuracy > gauntlet.challengerAccuracy;
+    const tied =
+      passed &&
+      Math.round(accuracy * 100) === Math.round(gauntlet.challengerAccuracy * 100);
+    gauntletBonusXp = won ? 40 : tied ? 15 : 0;
+    gauntletVerdict = {
+      gauntletId: gauntlet.id,
+      won,
+      tied,
+      challengerUsername: gauntlet.challengerUsername,
+      challengerAccuracy: gauntlet.challengerAccuracy,
+      bonusXp: gauntletBonusXp,
+    };
+  }
 
   const newAttemptsCount = daily.attemptsCount + 1;
   const newClearsCount = daily.clearsCount + (passed ? 1 : 0);
@@ -398,7 +447,12 @@ export async function submitAttempt(
     }
   }
 
-  const xpEarned = baseXpEarned + encoreBonusXp + bountyCompletedXp;
+  const xpEarned =
+    baseXpEarned +
+    encoreChallengeBonusXp +
+    encoreBonusXp +
+    gauntletBonusXp +
+    bountyCompletedXp;
   const previousLevel = profile.level;
   const newTotalXp = profile.totalXp + xpEarned;
   const newLevel = getLevelFromXp(newTotalXp);
@@ -410,6 +464,7 @@ export async function submitAttempt(
   let newStreakFreezes = profile.streakFreezes;
   let streakSavedByFreeze = false;
   let newLastPlayedDate = profile.lastPlayedDate;
+  let milestoneChestAwarded: 'unowned' | 'mythic' | null = null;
 
   if (passed && profile.lastPlayedDate !== targetUtcDate) {
     if (
@@ -433,6 +488,13 @@ export async function submitAttempt(
     if (newStreak >= 5 && newStreak % 5 === 0 && newStreakFreezes < 1) {
       newStreakFreezes = 1;
     }
+
+    // #33: Streak Milestone Celebration Chests (Days 3, 7, 14, 30)
+    if (newStreak === 14 || newStreak === 30) {
+      milestoneChestAwarded = 'mythic';
+    } else if (newStreak === 3 || newStreak === 7) {
+      milestoneChestAwarded = 'unowned';
+    }
   }
 
   const nextFeats = [...profile.feats];
@@ -447,7 +509,7 @@ export async function submitAttempt(
   if (passed) {
     grant('first_tune');
     if (accuracy >= 1) grant('flawless');
-    if (daily.finalRoll === 1) grant('nat1_clear');
+    if (activeRoll === 1) grant('nat1_clear');
     if (graceUsed) grant('grace_note');
     if (newStreak >= 3) grant('streak3');
     if (newStreak >= 7) grant('streak7');
@@ -466,18 +528,19 @@ export async function submitAttempt(
   if (passed && newChestsEarned < 1) {
     newChestsEarned = 1;
   }
-  if (
-    passed &&
-    (accuracy >= 1 || daily.finalRoll === 20) &&
-    newChestsEarned < 2
-  ) {
+  if (passed && (accuracy >= 1 || activeRoll === 20) && newChestsEarned < 2) {
     newChestsEarned = 2;
+  }
+  let nextMilestoneTier = daily.milestoneChestTier ?? null;
+  if (milestoneChestAwarded) {
+    newChestsEarned += 1;
+    nextMilestoneTier = milestoneChestAwarded;
   }
 
   const noteResults = sanitizeNoteResults(rawNoteResults);
   const lastRunSnapshot: StoredLastRun = {
     utcDate: targetUtcDate,
-    roll: daily.finalRoll,
+    roll: activeRoll,
     accuracy,
     xpEarned,
     passed,
@@ -495,6 +558,7 @@ export async function submitAttempt(
       todayXp: String(newTodayXp),
       chestsEarned: String(newChestsEarned),
       bountyClaimed: newBountyClaimed ? '1' : '0',
+      milestoneChestTier: nextMilestoneTier ?? '',
       lastAttemptAt: String(nowMs),
       lastRun: JSON.stringify(lastRunSnapshot),
     }),
@@ -556,7 +620,10 @@ export async function submitAttempt(
     accuracy,
     xpEarned,
     encoreBonusXp,
+    encoreChallengeBonusXp,
     bountyCompletedXp,
+    milestoneChestAwarded,
+    gauntletVerdict,
     streakSavedByFreeze,
     leveledUp,
     previousLevel,
@@ -587,6 +654,7 @@ export async function submitAttempt(
       todayXp: newTodayXp,
       chestsEarned: newChestsEarned,
       bountyClaimed: newBountyClaimed,
+      milestoneChestTier: nextMilestoneTier,
     },
     tavernStats: updatedStats,
   };
@@ -656,10 +724,16 @@ async function fetchSingleBoard(
 
   const top: LeaderboardEntry[] = rawTop.map((entry, idx) => {
     let bardAvatar: BardAvatarConfig | null = null;
+    let epithet: string | null = null;
     const rawBard = bardRaws[idx];
     if (rawBard) {
       try {
         bardAvatar = JSON.parse(rawBard) as BardAvatarConfig;
+        if (bardAvatar.epithet && bardAvatar.epithet !== 'none') {
+          epithet =
+            BARD_EPITHETS.find((e) => e.id === bardAvatar?.epithet)?.label ??
+            null;
+        }
       } catch {
         bardAvatar = null;
       }
@@ -670,6 +744,7 @@ async function fetchSingleBoard(
       score: entry.score,
       snoovatarUrl: avatars[idx] || null,
       bardAvatar,
+      epithet,
     };
   });
 
@@ -760,9 +835,25 @@ export async function openMysteryChest(
     pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
   let isDuplicate = profile.relics.includes(picked.id);
   let pityTriggered = false;
+  let milestoneGuaranteed = false;
   let nextDupePity = isDuplicate ? profile.dupePity + 1 : 0;
 
-  if (isDuplicate && nextDupePity >= DUPE_PITY_THRESHOLD) {
+  if (daily.milestoneChestTier) {
+    const unownedAll = RELIC_CATALOG.filter(
+      (item) => !profile.relics.includes(item.id)
+    );
+    const unownedMythic = unownedAll.filter((item) => item.rarity === 'mythic');
+    const milestonePool =
+      daily.milestoneChestTier === 'mythic' && unownedMythic.length > 0
+        ? unownedMythic
+        : unownedAll;
+    if (milestonePool.length > 0) {
+      picked = milestonePool[Math.floor(Math.random() * milestonePool.length)]!;
+      isDuplicate = false;
+      milestoneGuaranteed = true;
+      nextDupePity = 0;
+    }
+  } else if (isDuplicate && nextDupePity >= DUPE_PITY_THRESHOLD) {
     const unowned = RELIC_CATALOG.filter(
       (item) => !profile.relics.includes(item.id)
     );
@@ -810,6 +901,7 @@ export async function openMysteryChest(
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
       todayXp: String(newTodayXp),
+      milestoneChestTier: '',
     }),
     redis.hSet(pKey, {
       relics: JSON.stringify(nextRelics),
@@ -847,6 +939,7 @@ export async function openMysteryChest(
     relicId: picked.id,
     isDuplicate,
     pityTriggered,
+    milestoneGuaranteed,
     bonusXp,
     leveledUp,
     previousLevel,
@@ -865,6 +958,7 @@ export async function openMysteryChest(
       ...daily,
       chestsOpened: newChestsOpened,
       todayXp: newTodayXp,
+      milestoneChestTier: null,
     },
   };
 }
@@ -945,7 +1039,8 @@ export async function saveBardAvatar(
   const sanitized = sanitizeBardAvatarConfig(
     rawConfig,
     profile.relics,
-    profile.feats
+    profile.feats,
+    profile.streak
   );
   const serialized = JSON.stringify(sanitized);
 
@@ -1003,4 +1098,89 @@ export async function devUnlockAll(
   ]);
 
   return { profile, daily };
+}
+
+export async function createGauntlet(
+  playerKey: string,
+  username: string,
+  isAnonymous: boolean,
+  snoovatarUrl?: string | null
+): Promise<GauntletChallenge> {
+  const utcDate = getUtcDateKey();
+  const [profile, lastRun] = await Promise.all([
+    getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
+    getLastRunForShare(playerKey, utcDate),
+  ]);
+
+  if (!lastRun || !lastRun.passed) {
+    throw new Error('Clear today’s melody before throwing down a Gauntlet!');
+  }
+
+  const id = `g_${Date.now().toString(36)}_${randomInt(1000, 9999)}`;
+  const challenge: GauntletChallenge = {
+    id,
+    utcDate: lastRun.utcDate,
+    roll: lastRun.roll,
+    seedKey: username,
+    challengerUsername: username,
+    challengerAccuracy: lastRun.accuracy,
+    challengerBardAvatar: profile.bardAvatar,
+    challengerSnoovatarUrl: profile.snoovatarUrl ?? null,
+  };
+
+  const poolKey = `tavern:gauntlets:${lastRun.utcDate}`;
+  await Promise.all([
+    redis.set(`gauntlet:${id}`, JSON.stringify(challenge), {
+      expiration: new Date(Date.now() + TTL_48H_SECONDS * 1000),
+    }),
+    redis.zAdd(poolKey, { member: id, score: Date.now() }),
+    redis.expire(poolKey, TTL_48H_SECONDS),
+  ]);
+
+  return challenge;
+}
+
+export async function getGauntletById(
+  id: string
+): Promise<GauntletChallenge | null> {
+  const raw = await redis.get(`gauntlet:${id}`).catch(() => null);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as GauntletChallenge;
+  } catch {
+    return null;
+  }
+}
+
+export async function getRandomGauntlet(
+  excludeUsername: string
+): Promise<GauntletChallenge | null> {
+  const utcDate = getUtcDateKey();
+  const poolKey = `tavern:gauntlets:${utcDate}`;
+  const recent = await redis
+    .zRange(poolKey, 0, 29, { by: 'rank', reverse: true })
+    .catch(() => []);
+  if (recent.length === 0) return null;
+
+  const candidates = await Promise.all(
+    recent.map((r) => getGauntletById(r.member))
+  );
+  const filtered = candidates.filter(
+    (g): g is GauntletChallenge =>
+      g !== null && g.challengerUsername !== excludeUsername
+  );
+  const pool = filtered.length > 0 ? filtered : candidates.filter((g): g is GauntletChallenge => g !== null);
+  if (pool.length === 0) return null;
+
+  return pool[Math.floor(Math.random() * pool.length)]!;
+}
+
+export async function getLastWeekHeadliner(
+  prevWeekKey: string
+): Promise<{ username: string; score: number } | null> {
+  const rawTop = await redis
+    .zRange(weeklyBoardKey(prevWeekKey), 0, 0, { by: 'rank', reverse: true })
+    .catch(() => []);
+  const first = rawTop[0];
+  return first ? { username: first.member, score: first.score } : null;
 }
