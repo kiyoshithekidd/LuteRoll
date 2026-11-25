@@ -197,7 +197,11 @@ export function FeatsModal({
         </div>
 
         {/* Tab Content */}
-        <div className="overflow-y-auto min-h-0 overscroll-contain touch-pan-y space-y-2.5 pr-0.5 flex-1">
+        <div
+          className="overflow-y-auto min-h-0 overscroll-contain touch-pan-y space-y-2.5 pr-0.5 flex-1"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {tab === 'bard' && (
             <>
               {/* Live Illustrated Bard Preview */}
