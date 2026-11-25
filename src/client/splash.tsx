@@ -10,7 +10,6 @@ import { soundEngine } from './audio/soundEngine';
 import streakFlameUrl from './assets/streak-flame.webp';
 import bountySealUrl from './assets/bounty-seal.webp';
 import luteCrestUrl from './assets/lute-crest.webp';
-import { TavernGuideModal } from './components/TavernGuideModal';
 import { BardAvatar } from './components/BardAvatar';
 import { trackAppReady } from './telemetry';
 
@@ -39,7 +38,6 @@ function formatShortUtcDate(utcDate: string): string {
 
 export const Splash = () => {
   const [state, setState] = useState<StateResponse | null>(null);
-  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     trackAppReady();
@@ -58,9 +56,15 @@ export const Splash = () => {
     };
   }, []);
 
-  const openVaultInExpandedMode = (e: MouseEvent<HTMLButtonElement>) => {
+  const openModalInExpandedMode = (
+    e: MouseEvent<HTMLButtonElement>,
+    modal: 'vault' | 'guide'
+  ) => {
     try {
-      localStorage.setItem('luteroll_open_vault_at', String(Date.now()));
+      localStorage.setItem(
+        'luteroll_open_modal_at',
+        JSON.stringify({ modal, at: Date.now() })
+      );
     } catch {
       // ignore storage errors
     }
@@ -103,7 +107,7 @@ export const Splash = () => {
           {state ? (
             <button
               type="button"
-              onClick={openVaultInExpandedMode}
+              onClick={(e) => openModalInExpandedMode(e, 'vault')}
               className="relative cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-[#ffe875] transition-transform hover:scale-105"
               title="Customize your Bard, Skins & Trophies"
             >
@@ -182,7 +186,7 @@ export const Splash = () => {
           {state && (
             <button
               type="button"
-              onClick={openVaultInExpandedMode}
+              onClick={(e) => openModalInExpandedMode(e, 'vault')}
               className="px-3 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
               title="Customize Bard, Skins, Relics & Feats"
             >
@@ -191,7 +195,7 @@ export const Splash = () => {
           )}
           <button
             type="button"
-            onClick={() => setShowGuide(true)}
+            onClick={(e) => openModalInExpandedMode(e, 'guide')}
             className="px-3 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-black/45 border border-[#d4af37]/50 text-[#ffe875] hover:bg-black/60 cursor-pointer shrink-0"
             aria-label="Tavern Guide"
           >
@@ -206,8 +210,6 @@ export const Splash = () => {
           </button>
         </div>
       </section>
-
-      {showGuide && <TavernGuideModal onClose={() => setShowGuide(false)} />}
     </main>
   );
 };

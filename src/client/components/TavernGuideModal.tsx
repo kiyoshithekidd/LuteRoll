@@ -53,16 +53,34 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
 
           <div>
             <h3 className="font-bold uppercase tracking-wider text-[#6e4726] mb-1">
-              Chests, Spells &amp; Streaks
+              Chests, Modes &amp; Duels
             </h3>
             <ul className="space-y-1">
               <li>
-                🎁 <strong>Mystery Chests:</strong> Earn 1 on your first clear +
-                1 bonus chest for 100% or Nat 20. Collect{' '}
-                <strong>48 Relics</strong> (3rd duplicate guarantees a new
-                relic) to unlock{' '}
-                <strong>13 lute, piano, organ &amp; synth voices</strong> (Tavern
-                Upright &amp; Tavern Lute start unlocked!).
+                🎁 <strong>Mystery &amp; Milestone Chests:</strong> Earn 1 on
+                your first clear + 1 bonus chest for 100% or Nat 20, plus{' '}
+                <strong>Streak Milestone Chests</strong> at Days 3, 7, 14 &amp;
+                30 (guaranteed new/mythic!). Collect <strong>48 Relics</strong>{' '}
+                (3rd duplicate guarantees new) to unlock{' '}
+                <strong>13 voiced instruments &amp; keyboard skins</strong>.
+              </li>
+              <li>
+                🎭 <strong>Tavern Vault Cosmetics:</strong> Unlock &amp; equip{' '}
+                <strong>Bard Portraits</strong>, <strong>5 d20 Dice Skins</strong>,{' '}
+                <strong>5 Note-Hit Sparks</strong>, escalating{' '}
+                <strong>Auras</strong>, and <strong>Bard Epithets</strong>{' '}
+                shown on leaderboards &amp; result cards.
+              </li>
+              <li>
+                ⚡ <strong>Encore Challenge Modes:</strong> After your first
+                daily clear, toggle <strong>No-Lights</strong> or{' '}
+                <strong>Fast Tempo (+20%)</strong> for{' '}
+                <strong>+50% Bonus XP</strong>.
+              </li>
+              <li>
+                ⚔️ <strong>Bardic Gauntlet:</strong> Throw a Gauntlet after
+                clearing or take a <strong>Random Gauntlet</strong> to duel
+                another bard&apos;s exact melody for <strong>+35 XP</strong>.
               </li>
               <li>
                 🍻 <strong>Tavern Tip Jar:</strong> Every bard&apos;s XP fills
@@ -70,13 +88,9 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
                 <strong>+15% Encore XP</strong> for everyone all day.
               </li>
               <li>
-                🛡️ <strong>Ward of Grace:</strong> A 3-day streak grants{' '}
-                <strong>1 free missed note</strong> per run (7-day streak ={' '}
-                <strong>2 free misses</strong>).
-              </li>
-              <li>
-                🧊 <strong>Streak Freeze:</strong> Earned every 5-day streak;
-                auto-saves your streak if you miss 1 UTC day.
+                🛡️ <strong>Ward of Grace &amp; Freezes:</strong> 3-day streak
+                grants <strong>1 free miss</strong> (7-day = <strong>2</strong>
+                ); earn a <strong>Streak Freeze</strong> every 5 days.
               </li>
               <li>
                 🎯 <strong>Daily Bounty:</strong> Complete today&apos;s rotating

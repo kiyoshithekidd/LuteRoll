@@ -168,11 +168,16 @@ export const Game = () => {
         soundEngine.setVoice(data.profile.selectedVoice);
         setPhase(data.daily.finalRoll !== null ? 'LISTEN' : 'ROLL');
         try {
-          const raw = localStorage.getItem('luteroll_open_vault_at');
+          const raw = localStorage.getItem('luteroll_open_modal_at');
           if (raw) {
-            localStorage.removeItem('luteroll_open_vault_at');
-            if (Date.now() - Number(raw) < 15_000) {
-              setShowFeats(true);
+            localStorage.removeItem('luteroll_open_modal_at');
+            const parsed = JSON.parse(raw) as {
+              modal?: 'vault' | 'guide';
+              at?: number;
+            };
+            if (parsed.at && Date.now() - parsed.at < 15_000) {
+              if (parsed.modal === 'vault') setShowFeats(true);
+              if (parsed.modal === 'guide') setShowGuide(true);
             }
           }
         } catch {
