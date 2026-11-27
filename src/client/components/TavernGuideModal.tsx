@@ -67,10 +67,9 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
                 challenges, streaks &amp; high levels (0% chest RNG!).
               </li>
               <li>
-                🎭 <strong>Modular Build-a-Bard Vault:</strong> Customize your
-                generic Chibi Bard&apos;s <strong>Skin &amp; Face</strong> and
-                equip <strong>130 mix-and-match Hair, Hats, Outfits, Props &amp; Auras</strong>{' '}
-                (1-to-1 with every Relic &amp; 25 Feats), plus{' '}
+                🎭 <strong>Tavern Vault Cosmetics:</strong> Unlock &amp; equip{' '}
+                <strong>23 Tiered Chibi Bard Portraits</strong> (escalating from
+                Starter to Mythic!), <strong>26 Stage Auras</strong>,{' '}
                 <strong>6 Animal Familiars</strong>,{' '}
                 <strong>5 d20 Dice Skins</strong>,{' '}
                 <strong>5 Note-Hit Sparks</strong>, and{' '}

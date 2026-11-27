@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
 import { FAMILIAR_URLS } from '../assets/familiarAssets';
 import type {
   NoteResult,
@@ -7,12 +8,13 @@ import type {
 } from '../../shared/api';
 import { FEAT_CATALOG, RELIC_CATALOG } from '../../shared/constants';
 import {
+  BARD_COSMETICS,
   BARD_EPITHETS,
+  DEFAULT_BARD_AVATAR,
   getAuraVfxTier,
 } from '../../shared/cosmetics';
 import { formatResultCardText } from '../../shared/resultCard';
 import { apiFetch } from '../apiClient';
-import { resolveBardPaperDoll } from '../assets/bardLayerAssets';
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -63,20 +65,25 @@ async function buildShareBannerDataUrl(
     ctx.strokeRect(4, 4, w - 8, h - 8);
 
     const cfg = profile.bardAvatar;
-    const { frame, layers } = resolveBardPaperDoll(cfg);
+    const frame =
+      BARD_COSMETICS.find((c) => c.slot === 'frame' && c.id === cfg.frame) ??
+      BARD_COSMETICS.find((c) => c.id === DEFAULT_BARD_AVATAR.frame)!;
     const vfxTier = getAuraVfxTier(frame.id);
 
+    const portraitId = cfg.portrait ?? 'busker';
+    const localPortraitUrl =
+      BARD_PORTRAIT_URLS[portraitId] ?? BARD_PORTRAIT_URLS.busker;
     const familiarUrl =
       cfg.familiar && cfg.familiar !== 'none' && cfg.familiar in FAMILIAR_URLS
         ? FAMILIAR_URLS[cfg.familiar]
         : null;
 
-    const [layerImgs, familiarImg] = await Promise.all([
-      Promise.all(layers.map((l) => loadImage(l.src))),
+    const [portraitImg, familiarImg] = await Promise.all([
+      loadImage(localPortraitUrl),
       familiarUrl ? loadImage(familiarUrl) : Promise.resolve(null),
     ]);
 
-    // Draw Modular Paper-Doll Bard Avatar with Aura ring
+    // Draw Bard Avatar with Aura ring
     const bx = 60;
     const by = h / 2;
     const br = 42;
@@ -90,29 +97,14 @@ async function buildShareBannerDataUrl(
       ctx.stroke();
       ctx.restore();
     }
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(bx, by, br, 0, Math.PI * 2);
-    ctx.clip();
-    const avatarBg = ctx.createRadialGradient(bx, by - 8, 6, bx, by, br);
-    avatarBg.addColorStop(0, frame.accentColor + (vfxTier === 'mythic' ? '55' : '28'));
-    avatarBg.addColorStop(1, frame.primaryColor);
-    ctx.fillStyle = avatarBg;
-    ctx.fillRect(bx - br, by - br, br * 2, br * 2);
-
-    layers.forEach((layer, idx) => {
-      const img = layerImgs[idx];
-      if (!img) return;
+    if (portraitImg) {
       ctx.save();
-      if (layer.filter) {
-        ctx.filter = layer.filter;
-      }
-      ctx.drawImage(img, bx - br, by - br, br * 2, br * 2);
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(portraitImg, bx - br, by - br, br * 2, br * 2);
       ctx.restore();
-    });
-    ctx.restore();
-
+    }
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
     ctx.strokeStyle = frame.accentColor;
@@ -285,6 +277,9 @@ export function ResultCard({
     }
     setCommentState('posting');
     try {
+      const portraitId = profile.bardAvatar.portrait ?? 'busker';
+      const portraitPath =
+        BARD_PORTRAIT_URLS[portraitId] ?? BARD_PORTRAIT_URLS.busker;
       const cardImageDataUrl = await buildShareBannerDataUrl(
         profile,
         roll,
@@ -293,7 +288,7 @@ export function ResultCard({
       const res = await apiFetch('/api/share-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utcDate, cardImageDataUrl }),
+        body: JSON.stringify({ utcDate, portraitPath, cardImageDataUrl }),
       });
       if (res.status === 401) {
         setCommentState('signin');

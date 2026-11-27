@@ -19,10 +19,9 @@ import {
   BARD_COSMETICS,
   BARD_EPITHETS,
   BARD_FAMILIARS,
+  BARD_PORTRAITS,
   DEFAULT_BARD_AVATAR,
   DICE_SKINS,
-  getCosmeticForFeat,
-  getCosmeticForRelic,
   KEYBOARD_SKIN_THEMES,
   NOTE_PARTICLE_SKINS,
   sanitizeBardAvatarConfig,
@@ -213,7 +212,7 @@ describe('formatBardFlairText (B8 badge priority)', () => {
   });
 });
 
-describe('Keyboard Skins & Modular Build-a-Bard (85 Relics + 25 Feats + 130 Wearables)', () => {
+describe('Keyboard Skins, Tiered Bard Portraits, 85 Relics & 25 Feats', () => {
   it('maps every single voice to an instrument-matched keyboard skin', () => {
     for (const voice of KEYBOARD_VOICES) {
       const skin = KEYBOARD_SKIN_THEMES[voice.id];
@@ -240,93 +239,39 @@ describe('Keyboard Skins & Modular Build-a-Bard (85 Relics + 25 Feats + 130 Wear
     }
   });
 
-  it('maps all 85 relics and all 25 feats 1-to-1 to 130 Build-a-Bard wearables (26 per slot)', () => {
-    assert.equal(BARD_COSMETICS.length, 130);
-    for (const slot of ['hair', 'hat', 'outfit', 'prop', 'frame'] as const) {
-      const slotItems = BARD_COSMETICS.filter((c) => c.slot === slot);
-      assert.equal(
-        slotItems.length,
-        26,
-        `Expected 26 wearables in slot ${slot}, got ${slotItems.length}`
-      );
-      const starters = slotItems.filter(
-        (c) => c.unlockRelicId === null && !c.unlockFeatId
-      );
-      assert.equal(
-        starters.length,
-        4,
-        `Expected 4 humble starters in slot ${slot}, got ${starters.length}`
-      );
-    }
-
-    const seenIds = new Set<string>();
-    for (const c of BARD_COSMETICS) {
-      assert.ok(!seenIds.has(c.id), `Duplicate cosmetic ID: ${c.id}`);
-      seenIds.add(c.id);
-    }
-
-    for (const relic of RELIC_CATALOG) {
-      const matches = BARD_COSMETICS.filter(
-        (c) => c.unlockRelicId === relic.id
-      );
-      assert.equal(
-        matches.length,
-        1,
-        `Relic ${relic.id} (${relic.name}) expected 1 mapped wearable, got ${matches.length}`
-      );
-      assert.ok(getCosmeticForRelic(relic.id));
-    }
-
+  it('defines 23 tiered pre-built Bard portraits, 25 feats, and 26 stage auras', () => {
+    assert.equal(BARD_PORTRAITS.length, 23);
     assert.equal(FEAT_CATALOG.length, 25);
-    for (const feat of FEAT_CATALOG) {
-      const matches = BARD_COSMETICS.filter((c) => c.unlockFeatId === feat.id);
-      assert.equal(
-        matches.length,
-        1,
-        `Feat ${feat.id} (${feat.title}) expected 1 mapped wearable, got ${matches.length}`
-      );
-      assert.ok(getCosmeticForFeat(feat.id));
-    }
+    assert.equal(BARD_COSMETICS.length, 26);
+
+    const starters = BARD_PORTRAITS.filter((p) => p.tier === 'starter');
+    const mythics = BARD_PORTRAITS.filter((p) => p.tier === 'mythic');
+    assert.equal(starters.length, 5);
+    assert.equal(mythics.length, 7);
   });
 
-  it('enforces relic/feat unlock rules and migrates legacy cloak configs safely', () => {
+  it('enforces relic and feat unlock rules during avatar sanitization', () => {
     const lockedAttempt = sanitizeBardAvatarConfig(
       {
-        hair: 'phoenix_mane',
-        hat: 'crown_of_keys',
-        cloak: 'virtuoso_cape',
-        prop: 'celestial_bell',
+        portrait: 'realm_sovereign',
         frame: 'nat20_crit_aura',
       },
       [],
       []
     );
-    assert.equal(lockedAttempt.hair, DEFAULT_BARD_AVATAR.hair);
-    assert.equal(lockedAttempt.hat, DEFAULT_BARD_AVATAR.hat);
-    assert.equal(lockedAttempt.outfit, DEFAULT_BARD_AVATAR.outfit);
-    assert.equal(lockedAttempt.prop, DEFAULT_BARD_AVATAR.prop);
+    assert.equal(lockedAttempt.portrait, DEFAULT_BARD_AVATAR.portrait);
     assert.equal(lockedAttempt.frame, DEFAULT_BARD_AVATAR.frame);
 
     const unlockedAttempt = sanitizeBardAvatarConfig(
       {
-        hair: 'phoenix_mane',
-        hat: 'crown_of_keys',
-        cloak: 'virtuoso_cape',
-        prop: 'celestial_bell',
+        portrait: 'realm_sovereign',
         frame: 'nat20_crit_aura',
-        faceStyle: 'serene',
-        skinTone: 'amber',
       },
-      ['phoenix_plume', 'grand_crown', 'celestial_carillon'],
-      ['level25', 'nat20']
+      [],
+      ['level50', 'nat20']
     );
-    assert.equal(unlockedAttempt.hair, 'phoenix_mane');
-    assert.equal(unlockedAttempt.hat, 'crown_of_keys');
-    assert.equal(unlockedAttempt.outfit, 'virtuoso_cape');
-    assert.equal(unlockedAttempt.prop, 'celestial_bell');
+    assert.equal(unlockedAttempt.portrait, 'realm_sovereign');
     assert.equal(unlockedAttempt.frame, 'nat20_crit_aura');
-    assert.equal(unlockedAttempt.faceStyle, 'serene');
-    assert.equal(unlockedAttempt.skinTone, 'amber');
   });
 
   it('defines Phase A dice skins, particle skins, familiars, and epithets with unlock enforcement', () => {
