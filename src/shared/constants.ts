@@ -159,6 +159,7 @@ export type FeatMeta = {
     | 'nat1_clear'
     | 'streak3'
     | 'streak7'
+    | 'streak14'
     | 'streak30'
     | 'grinder5'
     | 'grace_note'
@@ -167,7 +168,16 @@ export type FeatMeta = {
     | 'relic30'
     | 'mythic_relic'
     | 'voice6'
-    | 'level25';
+    | 'level5'
+    | 'level10'
+    | 'level25'
+    | 'level50'
+    | 'bounty_hunter'
+    | 'encore_champ'
+    | 'gauntlet_victor'
+    | 'flawless_hard'
+    | 'blind_maestro'
+    | 'gauntlet_champion';
   title: string;
   description: string;
   icon: string;
@@ -179,6 +189,24 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     title: 'Tavern Debut',
     description: 'Clear your first daily melody.',
     icon: '🎵',
+  },
+  {
+    id: 'bounty_hunter',
+    title: 'Tavern Bounty Hunter',
+    description: 'Complete and claim a Daily Tavern Bounty.',
+    icon: '🎯',
+  },
+  {
+    id: 'level5',
+    title: 'Apprentice Graduate',
+    description: 'Reach Bard Level 5.',
+    icon: '📜',
+  },
+  {
+    id: 'level10',
+    title: 'Wandering Troubadour',
+    description: 'Reach Bard Level 10.',
+    icon: '🪕',
   },
   {
     id: 'flawless',
@@ -211,6 +239,12 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     icon: '🛡️',
   },
   {
+    id: 'streak14',
+    title: 'Fortnight Headliner',
+    description: 'Maintain an unbroken 14-day Tavern streak.',
+    icon: '🌙',
+  },
+  {
     id: 'streak30',
     title: 'Tavern Immortal',
     description: 'Reach a legendary 30-day streak.',
@@ -227,6 +261,36 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     title: 'Ward of Grace',
     description: 'Clear a melody saved by the Ward of Grace spell.',
     icon: '🪄',
+  },
+  {
+    id: 'encore_champ',
+    title: 'Encore Daredevil',
+    description: 'Clear a melody in No-Lights or Fast Tempo Encore mode.',
+    icon: '⚡',
+  },
+  {
+    id: 'gauntlet_victor',
+    title: 'Stage Duelist',
+    description: 'Win a Bardic Gauntlet duel against a rival bard.',
+    icon: '⚔️',
+  },
+  {
+    id: 'gauntlet_champion',
+    title: 'Grand Stage Champion',
+    description: 'Win 5 Bardic Gauntlet rival duels.',
+    icon: '🏆',
+  },
+  {
+    id: 'flawless_hard',
+    title: 'Virtuoso of the Storm',
+    description: 'Score 100% Flawless on a Very Hard or Brutal tune (roll ≤ 7).',
+    icon: '🌩️',
+  },
+  {
+    id: 'blind_maestro',
+    title: 'Blindfold Maestro',
+    description: 'Clear a No-Lights Encore melody with 95%+ accuracy.',
+    icon: '🕶️',
   },
   {
     id: 'relic5',
@@ -249,7 +313,7 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
   {
     id: 'mythic_relic',
     title: 'Mythic Resonance',
-    description: 'Unearth a Mythic-rarity Relic from a Mystery Chest.',
+    description: 'Forge your first Mythic Relic through a hard challenge or streak.',
     icon: '🌌',
   },
   {
@@ -264,6 +328,12 @@ export const FEAT_CATALOG: readonly FeatMeta[] = [
     description: 'Reach Bard Level 25.',
     icon: '🌟',
   },
+  {
+    id: 'level50',
+    title: 'Voice of the Realm',
+    description: 'Reach Bard Level 50.',
+    icon: '🌠',
+  },
 ] as const;
 
 export type RelicMeta = {
@@ -271,62 +341,201 @@ export type RelicMeta = {
   name: string;
   rarity: 'common' | 'uncommon' | 'rare' | 'mythic';
   icon: string;
+  /** 'chest' = drops from Mystery Chests; 'challenge' = forged strictly by hard challenges/streaks (0% chest RNG) */
+  source: 'chest' | 'challenge';
+  /** Human-readable unlock condition for earned-only Mythic Relics */
+  challengeHint?: string;
 };
 
 export const RELIC_CATALOG: readonly RelicMeta[] = [
-  // 16 Common
-  { id: 'ivory_keycap', name: 'Ivory Keycap', rarity: 'common', icon: '🎹' },
-  { id: 'brass_fork', name: 'Brass Tuning Fork', rarity: 'common', icon: '🔱' },
-  { id: 'maple_metro', name: 'Maple Metronome', rarity: 'common', icon: '⏳' },
-  { id: 'felt_damper', name: 'Felt Damper', rarity: 'common', icon: '🧶' },
-  { id: 'key_polish', name: 'Resin Key Polish', rarity: 'common', icon: '🧴' },
-  { id: 'pitch_pipe', name: 'Tin Pitch Pipe', rarity: 'common', icon: '🎺' },
-  { id: 'staff_scroll', name: 'Parchment Staff', rarity: 'common', icon: '📜' },
-  { id: 'candle_sheet', name: 'Candlelit Score', rarity: 'common', icon: '🕯️' },
-  { id: 'oak_keyslip', name: 'Oak Keyslip', rarity: 'common', icon: '🪵' },
-  { id: 'linen_cover', name: 'Linen Key Cover', rarity: 'common', icon: '🧣' },
-  { id: 'quill_nib', name: 'Composer Quill', rarity: 'common', icon: '🪶' },
-  { id: 'wax_seal', name: 'Encore Wax Seal', rarity: 'common', icon: '🔏' },
-  { id: 'copper_peg', name: 'Copper Tuning Peg', rarity: 'common', icon: '🔩' },
-  { id: 'rosin_cake', name: 'Amber Rosin Cake', rarity: 'common', icon: '🍯' },
-  { id: 'leather_folio', name: 'Leather Score Folio', rarity: 'common', icon: '📁' },
-  { id: 'tavern_mug', name: 'Tip Jar Tankard', rarity: 'common', icon: '🍺' },
-  // 14 Uncommon
-  { id: 'silver_capo', name: 'Silver Octave Key', rarity: 'uncommon', icon: '🗝️' },
-  { id: 'velvet_bench', name: 'Velvet Bench Pad', rarity: 'uncommon', icon: '🛋️' },
-  { id: 'ebony_sharp', name: 'Ebony Sharp Key', rarity: 'uncommon', icon: '⬛' },
-  { id: 'copper_coil', name: 'Copper String Coil', rarity: 'uncommon', icon: '🌀' },
-  { id: 'oak_stand', name: 'Oak Music Stand', rarity: 'uncommon', icon: '🎼' },
-  { id: 'tavern_book', name: 'Tavern Songbook', rarity: 'uncommon', icon: '📖' },
-  { id: 'gilded_pedals', name: 'Gilded Sustain Pedals', rarity: 'uncommon', icon: '🦶' },
-  { id: 'bronze_chime', name: 'Bronze Door Chime', rarity: 'uncommon', icon: '🔔' },
-  { id: 'bellows_strap', name: 'Concertina Bellows', rarity: 'uncommon', icon: '🪗' },
-  { id: 'reed_plate', name: 'Brass Reed Plate', rarity: 'uncommon', icon: '🎞️' },
-  { id: 'stained_glass', name: 'Chapel Rose Glass', rarity: 'uncommon', icon: '🪟' },
-  { id: 'silver_baton', name: 'Silver Conductor Baton', rarity: 'uncommon', icon: '🪄' },
-  { id: 'velvet_case', name: 'Velvet Key Roll', rarity: 'uncommon', icon: '🎒' },
-  { id: 'echo_horn', name: 'Brass Echo Horn', rarity: 'uncommon', icon: '📯' },
-  // 12 Rare
-  { id: 'amber_box', name: 'Amber Resonance Box', rarity: 'rare', icon: '🔶' },
-  { id: 'sapphire_key', name: 'Sapphire Tuning Key', rarity: 'rare', icon: '💎' },
-  { id: 'clock_arp', name: 'Clockwork Arpeggiator', rarity: 'rare', icon: '⚙️' },
-  { id: 'moon_ring', name: 'Moonstone Chord Ring', rarity: 'rare', icon: '🌙' },
-  { id: 'dragon_hammer', name: 'Dragonbone Hammer', rarity: 'rare', icon: '🐉' },
-  { id: 'phantom_pedal', name: 'Phantom Reverb Pedal', rarity: 'rare', icon: '👻' },
-  { id: 'crystal_pipe', name: 'Crystal Organ Pipe', rarity: 'rare', icon: '🧊' },
-  { id: 'runic_diapason', name: 'Runic Diapason', rarity: 'rare', icon: '🔮' },
-  { id: 'gilded_harp', name: 'Gilded Soundboard', rarity: 'rare', icon: '✨' },
-  { id: 'storm_coil', name: 'Stormglass Osc', rarity: 'rare', icon: '⚡' },
-  { id: 'phoenix_wire', name: 'Phoenix Bass Wire', rarity: 'rare', icon: '🔥' },
-  { id: 'star_compass', name: 'Harmonic Astrolabe', rarity: 'rare', icon: '🧭' },
-  // 6 Mythic
-  { id: 'grand_crown', name: 'Crown of the Keys', rarity: 'mythic', icon: '👑' },
-  { id: 'astral_board', name: 'Astral Soundboard', rarity: 'mythic', icon: '🌌' },
-  { id: 'conservatory_heart', name: 'Conservatory Heart', rarity: 'mythic', icon: '❤️‍🔥' },
-  { id: 'celestial_carillon', name: 'Celestial Carillon', rarity: 'mythic', icon: '🌠' },
-  { id: 'chronos_escapement', name: 'Chronos Escapement', rarity: 'mythic', icon: '🕰️' },
-  { id: 'sovereign_octave', name: 'Sovereign Octave', rarity: 'mythic', icon: '🏆' },
+  // === 30 COMMON (Chest Drops — 6 Hats, 6 Outfits, 6 Props, 5 Auras, 7 Hair) ===
+  { id: 'ivory_keycap', name: 'Ivory Keycap', rarity: 'common', icon: '🎹', source: 'chest' },
+  { id: 'brass_fork', name: 'Brass Tuning Fork', rarity: 'common', icon: '🔱', source: 'chest' },
+  { id: 'maple_metro', name: 'Maple Metronome', rarity: 'common', icon: '⏳', source: 'chest' },
+  { id: 'felt_damper', name: 'Felt Damper', rarity: 'common', icon: '🧶', source: 'chest' },
+  { id: 'key_polish', name: 'Resin Key Polish', rarity: 'common', icon: '🧴', source: 'chest' },
+  { id: 'pitch_pipe', name: 'Tin Pitch Pipe', rarity: 'common', icon: '🎺', source: 'chest' },
+  { id: 'staff_scroll', name: 'Parchment Staff', rarity: 'common', icon: '📜', source: 'chest' },
+  { id: 'candle_sheet', name: 'Candlelit Score', rarity: 'common', icon: '🕯️', source: 'chest' },
+  { id: 'oak_keyslip', name: 'Oak Keyslip', rarity: 'common', icon: '🪵', source: 'chest' },
+  { id: 'linen_cover', name: 'Linen Key Cover', rarity: 'common', icon: '🧣', source: 'chest' },
+  { id: 'quill_nib', name: 'Composer Quill', rarity: 'common', icon: '🪶', source: 'chest' },
+  { id: 'wax_seal', name: 'Encore Wax Seal', rarity: 'common', icon: '🔏', source: 'chest' },
+  { id: 'copper_peg', name: 'Copper Tuning Peg', rarity: 'common', icon: '🔩', source: 'chest' },
+  { id: 'rosin_cake', name: 'Amber Rosin Cake', rarity: 'common', icon: '🍯', source: 'chest' },
+  { id: 'leather_folio', name: 'Leather Score Folio', rarity: 'common', icon: '📁', source: 'chest' },
+  { id: 'tavern_mug', name: 'Tip Jar Tankard', rarity: 'common', icon: '🍺', source: 'chest' },
+  // New Common Relics (+14)
+  { id: 'straw_brim', name: 'Woven Busker Straw', rarity: 'common', icon: '👒', source: 'chest' },
+  { id: 'wool_pin', name: 'Stitched Wool Pin', rarity: 'common', icon: '🧷', source: 'chest' },
+  { id: 'felt_band', name: 'Tavern Felt Hatband', rarity: 'common', icon: '🎀', source: 'chest' },
+  { id: 'tavern_apron', name: 'Barkeeper Linen Apron', rarity: 'common', icon: '🧥', source: 'chest' },
+  { id: 'hemp_sash', name: 'Braided Hemp Sash', rarity: 'common', icon: '🪢', source: 'chest' },
+  { id: 'patched_shawl', name: 'Hearthside Wool Shawl', rarity: 'common', icon: '🧣', source: 'chest' },
+  { id: 'hearth_spark', name: 'Tinderbox Hearth Flint', rarity: 'common', icon: '🪨', source: 'chest' },
+  { id: 'wooden_comb', name: 'Carved Boxwood Comb', rarity: 'common', icon: '🪮', source: 'chest' },
+  { id: 'hemp_tie', name: 'Twisted Lute-String Tie', rarity: 'common', icon: '🧵', source: 'chest' },
+  { id: 'copper_pin', name: 'Copper Clef Hairpin', rarity: 'common', icon: '📍', source: 'chest' },
+  { id: 'barber_tonic', name: 'Bay Rum Hair Tonic', rarity: 'common', icon: '🧪', source: 'chest' },
+  { id: 'bone_clasp', name: 'Carved Bone Clasp', rarity: 'common', icon: '🦴', source: 'chest' },
+  { id: 'meadow_sprig', name: 'Dried Meadow Sprig', rarity: 'common', icon: '🌿', source: 'chest' },
+  { id: 'cedar_brush', name: 'Cedar Bristle Brush', rarity: 'common', icon: '🪥', source: 'chest' },
+
+  // === 25 UNCOMMON (Chest Drops — 5 per slot) ===
+  { id: 'silver_capo', name: 'Silver Octave Key', rarity: 'uncommon', icon: '🗝️', source: 'chest' },
+  { id: 'velvet_bench', name: 'Velvet Bench Pad', rarity: 'uncommon', icon: '🛋️', source: 'chest' },
+  { id: 'ebony_sharp', name: 'Ebony Sharp Key', rarity: 'uncommon', icon: '⬛', source: 'chest' },
+  { id: 'copper_coil', name: 'Copper String Coil', rarity: 'uncommon', icon: '🌀', source: 'chest' },
+  { id: 'oak_stand', name: 'Oak Music Stand', rarity: 'uncommon', icon: '🎼', source: 'chest' },
+  { id: 'tavern_book', name: 'Tavern Songbook', rarity: 'uncommon', icon: '📖', source: 'chest' },
+  { id: 'gilded_pedals', name: 'Gilded Sustain Pedals', rarity: 'uncommon', icon: '🦶', source: 'chest' },
+  { id: 'bronze_chime', name: 'Bronze Door Chime', rarity: 'uncommon', icon: '🔔', source: 'chest' },
+  { id: 'bellows_strap', name: 'Concertina Bellows', rarity: 'uncommon', icon: '🪗', source: 'chest' },
+  { id: 'reed_plate', name: 'Brass Reed Plate', rarity: 'uncommon', icon: '🎞️', source: 'chest' },
+  { id: 'stained_glass', name: 'Chapel Rose Glass', rarity: 'uncommon', icon: '🪟', source: 'chest' },
+  { id: 'silver_baton', name: 'Silver Conductor Baton', rarity: 'uncommon', icon: '🪄', source: 'chest' },
+  { id: 'velvet_case', name: 'Velvet Key Roll', rarity: 'uncommon', icon: '🎒', source: 'chest' },
+  { id: 'echo_horn', name: 'Brass Echo Horn', rarity: 'uncommon', icon: '📯', source: 'chest' },
+  // New Uncommon Relics (+11)
+  { id: 'plume_brooch', name: 'Pheasant Plume Brooch', rarity: 'uncommon', icon: '🪶', source: 'chest' },
+  { id: 'brocade_cuff', name: 'Gilded Brocade Cuff', rarity: 'uncommon', icon: '🧵', source: 'chest' },
+  { id: 'cedar_pick', name: 'Inlaid Cedar Plectrum', rarity: 'uncommon', icon: '🎸', source: 'chest' },
+  { id: 'emerald_lens', name: 'Emerald Stage Lantern', rarity: 'uncommon', icon: '🏮', source: 'chest' },
+  { id: 'silver_chime_ring', name: 'Silver Chime Ring', rarity: 'uncommon', icon: '💍', source: 'chest' },
+  { id: 'velvet_spotlight', name: 'Velvet Stage Curtain', rarity: 'uncommon', icon: '🎭', source: 'chest' },
+  { id: 'velvet_ribbon', name: 'Crimson Velvet Ribbon', rarity: 'uncommon', icon: '🎀', source: 'chest' },
+  { id: 'silver_fork', name: 'Silver Tuning Hair-Fork', rarity: 'uncommon', icon: '🍴', source: 'chest' },
+  { id: 'jade_bead', name: 'Carved Jade Braid Bead', rarity: 'uncommon', icon: '🟢', source: 'chest' },
+  { id: 'auburn_henna', name: 'Tavern Spice Henna', rarity: 'uncommon', icon: '🍂', source: 'chest' },
+  { id: 'braid_ring', name: 'Gilded Braid Rings', rarity: 'uncommon', icon: '🪙', source: 'chest' },
+
+  // === 20 RARE (Chest Drops — 4 Hats, 4 Outfits, 4 Props, 5 Auras, 3 Hair) ===
+  { id: 'amber_box', name: 'Amber Resonance Box', rarity: 'rare', icon: '🔶', source: 'chest' },
+  { id: 'sapphire_key', name: 'Sapphire Tuning Key', rarity: 'rare', icon: '💎', source: 'chest' },
+  { id: 'clock_arp', name: 'Clockwork Arpeggiator', rarity: 'rare', icon: '⚙️', source: 'chest' },
+  { id: 'moon_ring', name: 'Moonstone Chord Ring', rarity: 'rare', icon: '🌙', source: 'chest' },
+  { id: 'dragon_hammer', name: 'Dragonbone Hammer', rarity: 'rare', icon: '🐉', source: 'chest' },
+  { id: 'phantom_pedal', name: 'Phantom Reverb Pedal', rarity: 'rare', icon: '👻', source: 'chest' },
+  { id: 'crystal_pipe', name: 'Crystal Organ Pipe', rarity: 'rare', icon: '🧊', source: 'chest' },
+  { id: 'runic_diapason', name: 'Runic Diapason', rarity: 'rare', icon: '🔮', source: 'chest' },
+  { id: 'gilded_harp', name: 'Gilded Soundboard', rarity: 'rare', icon: '✨', source: 'chest' },
+  { id: 'storm_coil', name: 'Stormglass Osc', rarity: 'rare', icon: '⚡', source: 'chest' },
+  { id: 'phoenix_wire', name: 'Phoenix Bass Wire', rarity: 'rare', icon: '🔥', source: 'chest' },
+  { id: 'star_compass', name: 'Harmonic Astrolabe', rarity: 'rare', icon: '🧭', source: 'chest' },
+  // New Rare Relics (+8)
+  { id: 'opal_circlet', name: 'Opal Harmonic Circlet', rarity: 'rare', icon: '💠', source: 'chest' },
+  { id: 'clockwork_pauldrons', name: 'Brass Clockwork Cogs', rarity: 'rare', icon: '🛠️', source: 'chest' },
+  { id: 'dragon_lute_peg', name: 'Dragonbone Lute Peg', rarity: 'rare', icon: '🦴', source: 'chest' },
+  { id: 'crystal_ocarina', name: 'Frost-Crystal Ocarina', rarity: 'rare', icon: '❄️', source: 'chest' },
+  { id: 'runic_lyre_string', name: 'Arcane Runic Lyre-String', rarity: 'rare', icon: '🌌', source: 'chest' },
+  { id: 'powder_puff', name: 'Courtly Baroque Powder', rarity: 'rare', icon: '🦢', source: 'chest' },
+  { id: 'arcana_dye', name: 'Vial of Cyan Arcana', rarity: 'rare', icon: '🧪', source: 'chest' },
+  { id: 'storm_feather', name: 'Tempest Roc Hairpin', rarity: 'rare', icon: '🦅', source: 'chest' },
+
+  // === 10 MYTHIC (0% Chest RNG — 100% Earned via Hard Challenges, High Levels & Streaks — 2 per slot) ===
+  {
+    id: 'grand_crown',
+    name: 'Crown of the Keys',
+    rarity: 'mythic',
+    icon: '👑',
+    source: 'challenge',
+    challengeHint: 'Score 100% Flawless on a Hard, Very Hard, or Brutal tune (roll ≤ 12)',
+  },
+  {
+    id: 'sovereign_octave',
+    name: 'Sovereign Octave',
+    rarity: 'mythic',
+    icon: '🏆',
+    source: 'challenge',
+    challengeHint: 'Reach Bard Level 40 (Legend of the Tavern)',
+  },
+  {
+    id: 'astral_board',
+    name: 'Astral Soundboard',
+    rarity: 'mythic',
+    icon: '🌌',
+    source: 'challenge',
+    challengeHint: 'Build an unbroken 14-Day Tavern Streak',
+  },
+  {
+    id: 'conservatory_heart',
+    name: 'Conservatory Heart',
+    rarity: 'mythic',
+    icon: '❤️‍🔥',
+    source: 'challenge',
+    challengeHint: 'Clear a Very Hard or Brutal tune (roll ≤ 7) in Encore Mode',
+  },
+  {
+    id: 'phoenix_plume',
+    name: 'Living Phoenix Plume',
+    rarity: 'mythic',
+    icon: '🔥',
+    source: 'challenge',
+    challengeHint: 'Clear a Brutal (Nat 1) melody with 85%+ accuracy',
+  },
+  {
+    id: 'nebula_comb',
+    name: 'Astral Nebula Comb',
+    rarity: 'mythic',
+    icon: '✨',
+    source: 'challenge',
+    challengeHint: 'Build an unbroken 21-Day Tavern Streak',
+  },
+  {
+    id: 'celestial_carillon',
+    name: 'Celestial Carillon',
+    rarity: 'mythic',
+    icon: '🌠',
+    source: 'challenge',
+    challengeHint: 'Win 3 Bardic Gauntlet rival duels',
+  },
+  {
+    id: 'orpheus_lyre',
+    name: 'Solar Sovereign Lyre',
+    rarity: 'mythic',
+    icon: '☀️',
+    source: 'challenge',
+    challengeHint: 'Collect 50 Chest Relics in the Tavern Vault',
+  },
+  {
+    id: 'chronos_escapement',
+    name: 'Chronos Escapement',
+    rarity: 'mythic',
+    icon: '🕰️',
+    source: 'challenge',
+    challengeHint: 'Clear 3 Fast-Tempo (+20%) Encore runs',
+  },
+  {
+    id: 'void_resonator',
+    name: 'Astral Void Resonator',
+    rarity: 'mythic',
+    icon: '🌀',
+    source: 'challenge',
+    challengeHint: 'Clear 3 No-Lights Encore runs',
+  },
 ] as const;
+
+export const CHEST_RELIC_CATALOG: readonly RelicMeta[] = RELIC_CATALOG.filter(
+  (r) => r.source === 'chest'
+);
+
+export const MYTHIC_RELIC_CATALOG: readonly RelicMeta[] = RELIC_CATALOG.filter(
+  (r) => r.source === 'challenge'
+);
+
+export function getChestDuplicateXp(
+  rarity: 'common' | 'uncommon' | 'rare' | 'mythic',
+  allChestRelicsOwned: boolean
+): number {
+  if (allChestRelicsOwned) {
+    if (rarity === 'rare') return 120;
+    if (rarity === 'uncommon') return 75;
+    return 45;
+  }
+  if (rarity === 'rare') return 60;
+  if (rarity === 'uncommon') return 40;
+  return 30;
+}
 
 export type KeyboardVoiceMeta = {
   id:

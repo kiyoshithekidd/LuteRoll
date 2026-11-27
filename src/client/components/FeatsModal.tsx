@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardVoiceId, PlayerProfile, RareFeat } from '../../shared/api';
 import {
+  CHEST_RELIC_CATALOG,
   DUPE_PITY_THRESHOLD,
   FEAT_CATALOG,
   KEYBOARD_VOICES,
+  MYTHIC_RELIC_CATALOG,
   RELIC_CATALOG,
 } from '../../shared/constants';
 import {
@@ -23,6 +25,7 @@ import {
   KEYBOARD_SKIN_THEMES,
   NOTE_PARTICLE_SKINS,
   type BardAvatarConfig,
+  type BardVisualTier,
 } from '../../shared/cosmetics';
 import { soundEngine } from '../audio/soundEngine';
 import bountySealUrl from '../assets/bounty-seal.webp';
@@ -49,10 +52,8 @@ type BardCategory =
   | 'epithet'
   | 'badge';
 
-const RARITY_STYLES: Record<
-  'common' | 'uncommon' | 'rare' | 'mythic',
-  string
-> = {
+const TIER_STYLES: Record<BardVisualTier, string> = {
+  starter: 'bg-stone-800 text-stone-300 border-stone-600/60',
   common: 'bg-stone-700 text-stone-200 border-stone-500/50',
   uncommon: 'bg-emerald-900 text-emerald-200 border-emerald-500/50',
   rare: 'bg-sky-900 text-sky-200 border-sky-400/60',
@@ -284,7 +285,87 @@ export function FeatsModal({
                 ))}
               </div>
 
-              {/* Animal Familiars Grid (#23) */}
+              {/* Illustrated Chibi Bard Portrait Grid */}
+              {bardCat === 'portrait' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {BARD_PORTRAITS.map((p) => {
+                    const unlocked = isPortraitUnlocked(
+                      p,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped =
+                      !profile.bardAvatar.useSnoovatar &&
+                      (profile.bardAvatar.portrait ?? 'busker') === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() =>
+                          void handleUpdateAvatar({
+                            portrait: p.id,
+                            useSnoovatar: false,
+                          })
+                        }
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-all ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875] shadow-[0_0_12px_rgba(255,232,117,0.4)]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer hover:brightness-105'
+                              : 'bg-black/45 border-[#d4af37]/20 opacity-65 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="relative shrink-0">
+                          <img
+                            src={BARD_PORTRAIT_URLS[p.id]}
+                            alt={p.name}
+                            className={`w-12 h-12 rounded-full object-cover border border-[#d4af37] ${
+                              unlocked ? '' : 'grayscale brightness-50'
+                            }`}
+                          />
+                          {!unlocked && (
+                            <span className="absolute inset-0 flex items-center justify-center text-sm">
+                              🔒
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold leading-tight truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/80'
+                            }`}
+                          >
+                            {p.name}
+                          </p>
+                          <span
+                            className={`inline-block mt-0.5 text-[8px] uppercase font-bold px-1 py-0.25 rounded border ${TIER_STYLES[p.tier]}`}
+                          >
+                            {p.tier}
+                          </span>
+                          <p
+                            className={`text-[9px] leading-tight mt-0.5 line-clamp-2 ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {equipped ? '✓ Active' : p.subtitle}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Animal Familiars Grid */}
               {bardCat === 'familiar' && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {BARD_FAMILIARS.map((fam) => {
@@ -358,7 +439,86 @@ export function FeatsModal({
                 </div>
               )}
 
-              {/* Dice Skin Grid (#28) */}
+              {/* Aura Rings Grid (26) */}
+              {bardCat === 'frame' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {frameCosmetics.map((item) => {
+                    const unlocked = isCosmeticUnlocked(
+                      item,
+                      profile.relics,
+                      profile.feats
+                    );
+                    const equipped = profile.bardAvatar.frame === item.id;
+                    const relicMeta = item.unlockRelicId
+                      ? RELIC_CATALOG.find((r) => r.id === item.unlockRelicId)
+                      : null;
+                    const featMeta = item.unlockFeatId
+                      ? FEAT_CATALOG.find((f) => f.id === item.unlockFeatId)
+                      : null;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={!unlocked || savingAvatar}
+                        onClick={() => void handleUpdateAvatar({ frame: item.id })}
+                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
+                          equipped
+                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
+                            : unlocked
+                              ? 'parchment-card border-[#d4af37] cursor-pointer'
+                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span
+                          className="w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center text-[10px]"
+                          style={{
+                            backgroundColor: item.primaryColor,
+                            borderColor: item.accentColor,
+                            boxShadow: `0 0 8px ${item.accentColor}88`,
+                          }}
+                        >
+                          {!unlocked ? '🔒' : equipped ? '✓' : ''}
+                        </span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[11px] font-bold truncate ${
+                              equipped
+                                ? 'text-[#ffe875]'
+                                : unlocked
+                                  ? 'text-[#1c1208]'
+                                  : 'text-[#f5ead2]/75'
+                            }`}
+                          >
+                            {item.name}
+                          </p>
+                          <p
+                            className={`text-[9px] truncate ${
+                              equipped
+                                ? 'text-[#ffe875]/80'
+                                : unlocked
+                                  ? 'text-[#6e4726]'
+                                  : 'text-[#f5ead2]/55'
+                            }`}
+                          >
+                            {unlocked
+                              ? `${item.visualTier.toUpperCase()} Aura`
+                              : featMeta
+                                ? `Feat: ${featMeta.title}`
+                                : relicMeta?.source === 'challenge' &&
+                                    relicMeta.challengeHint
+                                  ? relicMeta.challengeHint
+                                  : relicMeta
+                                    ? `Relic: ${relicMeta.name}`
+                                    : 'Starter'}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Dice Skin Grid */}
               {bardCat === 'dice' && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {DICE_SKINS.map((d) => {
@@ -426,7 +586,7 @@ export function FeatsModal({
                 </div>
               )}
 
-              {/* Note Sparks Grid (#30) */}
+              {/* Note Sparks Grid */}
               {bardCat === 'sparks' && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {NOTE_PARTICLE_SKINS.map((sp) => {
@@ -487,7 +647,7 @@ export function FeatsModal({
                 </div>
               )}
 
-              {/* Epithet Grid (#29) */}
+              {/* Epithet Grid */}
               {bardCat === 'epithet' && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {BARD_EPITHETS.map((ep) => {
@@ -542,158 +702,7 @@ export function FeatsModal({
                 </div>
               )}
 
-              {/* Illustrated Chibi Bard Portrait Grid */}
-              {bardCat === 'portrait' && (
-                <div className="grid grid-cols-2 gap-2">
-                  {BARD_PORTRAITS.map((p) => {
-                    const unlocked = isPortraitUnlocked(
-                      p,
-                      profile.relics,
-                      profile.feats
-                    );
-                    const equipped =
-                      !profile.bardAvatar.useSnoovatar &&
-                      (profile.bardAvatar.portrait ?? 'busker') === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        disabled={!unlocked || savingAvatar}
-                        onClick={() =>
-                          void handleUpdateAvatar({
-                            portrait: p.id,
-                            useSnoovatar: false,
-                          })
-                        }
-                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-all ${
-                          equipped
-                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875] shadow-[0_0_12px_rgba(255,232,117,0.4)]'
-                            : unlocked
-                              ? 'parchment-card border-[#d4af37] cursor-pointer hover:brightness-105'
-                              : 'bg-black/45 border-[#d4af37]/20 opacity-65 cursor-not-allowed'
-                        }`}
-                      >
-                        <div className="relative shrink-0">
-                          <img
-                            src={BARD_PORTRAIT_URLS[p.id]}
-                            alt={p.name}
-                            className={`w-12 h-12 rounded-full object-cover border border-[#d4af37] ${
-                              unlocked ? '' : 'grayscale brightness-50'
-                            }`}
-                          />
-                          {!unlocked && (
-                            <span className="absolute inset-0 flex items-center justify-center text-sm">
-                              🔒
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p
-                            className={`text-[11px] font-bold leading-tight truncate ${
-                              equipped
-                                ? 'text-[#ffe875]'
-                                : unlocked
-                                  ? 'text-[#1c1208]'
-                                  : 'text-[#f5ead2]/80'
-                            }`}
-                          >
-                            {p.name}
-                          </p>
-                          <p
-                            className={`text-[9px] leading-tight mt-0.5 line-clamp-2 ${
-                              equipped
-                                ? 'text-[#ffe875]/80'
-                                : unlocked
-                                  ? 'text-[#6e4726]'
-                                  : 'text-[#f5ead2]/55'
-                            }`}
-                          >
-                            {equipped ? '✓ Active' : p.subtitle}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Aura Rings Grid */}
-              {bardCat === 'frame' && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  {frameCosmetics.map((item) => {
-                    const unlocked = isCosmeticUnlocked(
-                      item,
-                      profile.relics,
-                      profile.feats
-                    );
-                    const equipped = profile.bardAvatar.frame === item.id;
-                    const relicMeta = item.unlockRelicId
-                      ? RELIC_CATALOG.find((r) => r.id === item.unlockRelicId)
-                      : null;
-                    const featMeta = item.unlockFeatId
-                      ? FEAT_CATALOG.find((f) => f.id === item.unlockFeatId)
-                      : null;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        disabled={!unlocked || savingAvatar}
-                        onClick={() => void handleUpdateAvatar({ frame: item.id })}
-                        className={`rounded-xl p-2 flex items-center gap-2 text-left border transition-colors ${
-                          equipped
-                            ? 'bg-[#103524] border-[#ffe875] text-[#ffe875]'
-                            : unlocked
-                              ? 'parchment-card border-[#d4af37] cursor-pointer'
-                              : 'bg-black/40 border-[#d4af37]/20 opacity-60 cursor-not-allowed'
-                        }`}
-                      >
-                        <span
-                          className="w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center text-[10px]"
-                          style={{
-                            backgroundColor: item.primaryColor,
-                            borderColor: item.accentColor,
-                            boxShadow: `0 0 8px ${item.accentColor}88`,
-                          }}
-                        >
-                          {!unlocked ? '🔒' : equipped ? '✓' : ''}
-                        </span>
-                        <div className="min-w-0">
-                          <p
-                            className={`text-[11px] font-bold truncate ${
-                              equipped
-                                ? 'text-[#ffe875]'
-                                : unlocked
-                                  ? 'text-[#1c1208]'
-                                  : 'text-[#f5ead2]/75'
-                            }`}
-                          >
-                            {item.name}
-                          </p>
-                          <p
-                            className={`text-[9px] truncate ${
-                              equipped
-                                ? 'text-[#ffe875]/80'
-                                : unlocked
-                                  ? 'text-[#6e4726]'
-                                  : 'text-[#f5ead2]/55'
-                            }`}
-                          >
-                            {unlocked
-                              ? 'Aura Unlocked'
-                              : featMeta
-                                ? `Feat: ${featMeta.title}`
-                                : relicMeta
-                                  ? `Relic: ${relicMeta.name}`
-                                  : 'Starter'}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Corner Crest Pin Picker (Any Owned Relic or Feat!) */}
+              {/* Corner Crest Pin Picker */}
               {bardCat === 'badge' && (
                 <div className="space-y-2">
                   <button
@@ -769,61 +778,140 @@ export function FeatsModal({
 
           {tab === 'relics' && (
             <>
-              <div className="flex items-center justify-between gap-2 text-[11px] text-[#f5ead2]/80">
+              <div className="flex items-center justify-between gap-2 text-[11px] text-[#f5ead2]/85">
                 <span>
-                  Every relic unlocks a Crest Pin, Aura, Bard Portrait, or
-                  Instrument Skin!
+                  Mythics are earned strictly by challenges &amp; streaks (0%
+                  chest RNG).
                 </span>
                 <span className="shrink-0 px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/35 text-[#ffe875] font-bold">
-                  Pity: {profile.dupePity}/{DUPE_PITY_THRESHOLD}
+                  {CHEST_RELIC_CATALOG.every((r) => unlockedRelics.has(r.id))
+                    ? '✨ Vault Complete'
+                    : `Pity: ${profile.dupePity}/${DUPE_PITY_THRESHOLD}`}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {RELIC_CATALOG.map((relic) => {
-                  const owned = unlockedRelics.has(relic.id);
-                  const wearable = getCosmeticForRelic(relic.id);
-                  return (
-                    <div
-                      key={relic.id}
-                      className={`rounded-xl p-2 flex items-center gap-2 border ${
-                        owned
-                          ? 'parchment-card border-[#d4af37]'
-                          : 'bg-black/40 border-[#d4af37]/20 opacity-60'
-                      }`}
-                    >
-                      <span
-                        className={`text-xl shrink-0 ${owned ? '' : 'grayscale opacity-50'}`}
+
+              {/* Earned-Only Mythic Challenge Relics */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#ffe875]">
+                  🌌 Mythic Challenge Relics ({MYTHIC_RELIC_CATALOG.filter((r) => unlockedRelics.has(r.id)).length}/{MYTHIC_RELIC_CATALOG.length})
+                </p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {MYTHIC_RELIC_CATALOG.map((relic) => {
+                    const owned = unlockedRelics.has(relic.id);
+                    const aura = getCosmeticForRelic(relic.id);
+                    const portraitReward = BARD_PORTRAITS.find(
+                      (p) => p.unlockRelicId === relic.id
+                    );
+                    return (
+                      <div
+                        key={relic.id}
+                        className={`rounded-xl p-2 flex items-center gap-2.5 border ${
+                          owned
+                            ? 'parchment-card border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                            : 'bg-amber-950/30 border-amber-400/30 opacity-80'
+                        }`}
                       >
-                        {owned ? relic.icon : '❔'}
-                      </span>
-                      <div className="min-w-0">
-                        <p
-                          className={`text-[11px] font-bold truncate ${
-                            owned ? 'text-[#1c1208]' : 'text-[#f5ead2]/75'
-                          }`}
+                        <span className="text-xl shrink-0">{relic.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p
+                              className={`text-[11px] font-bold truncate ${
+                                owned ? 'text-[#1c1208]' : 'text-[#ffe875]'
+                              }`}
+                            >
+                              {relic.name}
+                            </p>
+                            <span
+                              className={`text-[8px] uppercase font-bold px-1.5 py-0.25 rounded border ${TIER_STYLES.mythic}`}
+                            >
+                              {owned ? 'Forged' : 'Mythic'}
+                            </span>
+                          </div>
+                          {relic.challengeHint && (
+                            <p
+                              className={`text-[9px] leading-tight mt-0.5 ${
+                                owned ? 'text-[#6e4726]' : 'text-[#f5ead2]/80'
+                              }`}
+                            >
+                              ⚔️ {relic.challengeHint}
+                            </p>
+                          )}
+                          {(portraitReward || aura) && (
+                            <p
+                              className={`text-[9px] font-semibold truncate mt-0.5 ${
+                                owned ? 'text-[#103524]' : 'text-[#ffe875]/75'
+                              }`}
+                            >
+                              🎭 Unlocks:{' '}
+                              {portraitReward
+                                ? `Bard "${portraitReward.name}"`
+                                : `Aura "${aura?.name}"`}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mystery Chest Relics (75) */}
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#f5ead2]/80">
+                  🎁 Mystery Chest Relics ({CHEST_RELIC_CATALOG.filter((r) => unlockedRelics.has(r.id)).length}/{CHEST_RELIC_CATALOG.length})
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CHEST_RELIC_CATALOG.map((relic) => {
+                    const owned = unlockedRelics.has(relic.id);
+                    const aura = getCosmeticForRelic(relic.id);
+                    const portraitReward = BARD_PORTRAITS.find(
+                      (p) => p.unlockRelicId === relic.id
+                    );
+                    return (
+                      <div
+                        key={relic.id}
+                        className={`rounded-xl p-2 flex items-center gap-2 border ${
+                          owned
+                            ? 'parchment-card border-[#d4af37]'
+                            : 'bg-black/40 border-[#d4af37]/20 opacity-60'
+                        }`}
+                      >
+                        <span
+                          className={`text-lg shrink-0 ${owned ? '' : 'grayscale opacity-50'}`}
                         >
-                          {owned ? relic.name : 'Unknown Relic'}
-                        </p>
-                        {wearable && (
+                          {owned ? relic.icon : '❔'}
+                        </span>
+                        <div className="min-w-0">
                           <p
-                            className={`text-[9px] truncate ${
-                              owned
-                                ? 'text-[#103524] font-semibold'
-                                : 'text-[#f5ead2]/55'
+                            className={`text-[10px] font-bold truncate ${
+                              owned ? 'text-[#1c1208]' : 'text-[#f5ead2]/75'
                             }`}
                           >
-                            📌 Pin &amp; {wearable.name}
+                            {owned ? relic.name : 'Unknown Relic'}
                           </p>
-                        )}
-                        <span
-                          className={`inline-block mt-0.5 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${RARITY_STYLES[relic.rarity]}`}
-                        >
-                          {relic.rarity}
-                        </span>
+                          {(portraitReward || aura) && (
+                            <p
+                              className={`text-[9px] truncate ${
+                                owned
+                                  ? 'text-[#103524] font-semibold'
+                                  : 'text-[#f5ead2]/55'
+                              }`}
+                            >
+                              {portraitReward
+                                ? `🎭 ${portraitReward.name}`
+                                : `✨ ${aura?.name}`}
+                            </p>
+                          )}
+                          <span
+                            className={`inline-block mt-0.5 text-[8px] uppercase font-bold px-1.5 py-0.25 rounded border ${TIER_STYLES[relic.rarity]}`}
+                          >
+                            {relic.rarity}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -913,7 +1001,7 @@ export function FeatsModal({
           {tab === 'feats' &&
             FEAT_CATALOG.map((feat) => {
               const isUnlocked = unlockedFeats.has(feat.id);
-              const wearable = getCosmeticForFeat(feat.id);
+              const aura = getCosmeticForFeat(feat.id);
               const portraitReward = BARD_PORTRAITS.find(
                 (p) => p.unlockFeatId === feat.id
               );
@@ -959,16 +1047,16 @@ export function FeatsModal({
                     >
                       {feat.description}
                     </p>
-                    {(portraitReward || wearable) && (
+                    {(portraitReward || aura) && (
                       <p
                         className={`text-[10px] font-semibold mt-0.5 ${
-                          isUnlocked ? 'text-[#103524]' : 'text-[#ffe875]/70'
+                          isUnlocked ? 'text-[#103524]' : 'text-[#ffe875]/75'
                         }`}
                       >
                         🎭 Unlocks:{' '}
                         {portraitReward
                           ? `Bard Portrait "${portraitReward.name}"`
-                          : wearable?.name}
+                          : `Aura "${aura?.name}"`}
                       </p>
                     )}
                   </div>

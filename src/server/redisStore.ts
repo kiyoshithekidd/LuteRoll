@@ -2,11 +2,13 @@ import { randomInt } from 'node:crypto';
 import { redis } from '@devvit/web/server';
 import {
   BASE_XP_PER_RUN,
+  CHEST_RELIC_CATALOG,
   COMMUNITY_DAILY_XP_GOAL,
   DUPE_PITY_THRESHOLD,
   ENCORE_XP_BONUS_RATE,
   FAIL_ACCURACY_THRESHOLD,
   FEAT_CATALOG,
+  getChestDuplicateXp,
   getDailyBounty,
   getIsoWeekKey,
   getLevelFromXp,
@@ -156,10 +158,14 @@ export async function getPlayerProfile(
   const streakFreezes = data.streakFreezes
     ? parseInt(data.streakFreezes, 10)
     : 0;
-  const dupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
+  const rawDupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
   const relics = parseStringArray(data.relics);
+  const allChestOwned = CHEST_RELIC_CATALOG.every((c) => relics.includes(c.id));
+  const dupePity = allChestOwned
+    ? 0
+    : Math.max(0, Math.min(DUPE_PITY_THRESHOLD - 1, rawDupePity));
   const rawVoice = data.selectedVoice as KeyboardVoiceId | undefined;
   const selectedVoice: KeyboardVoiceId =
     rawVoice && KEYBOARD_VOICES.some((v) => v.id === rawVoice)
@@ -372,8 +378,9 @@ export async function submitAttempt(
 
   const activeRoll = gauntlet ? gauntlet.roll : daily.finalRoll!;
   const dKey = dailyKey(playerKey, targetUtcDate);
-  const [profile, rawDailyHash, currentStats] = await Promise.all([
+  const [profile, rawProfileHash, rawDailyHash, currentStats] = await Promise.all([
     getPlayerProfile(playerKey, username, isAnonymous, snoovatarUrl),
+    redis.hGetAll(pKey),
     redis.hGetAll(dKey),
     getTavernStats(targetUtcDate),
   ]);
@@ -426,6 +433,25 @@ export async function submitAttempt(
       bonusXp: gauntletBonusXp,
     };
   }
+
+  // Career challenge counters for earned-only Mythic Relics & pinnacle feats
+  const prevGauntletWins = rawProfileHash.gauntletWins
+    ? parseInt(rawProfileHash.gauntletWins, 10)
+    : 0;
+  const prevFastEncoreClears = rawProfileHash.fastEncoreClears
+    ? parseInt(rawProfileHash.fastEncoreClears, 10)
+    : 0;
+  const prevNoLightsEncoreClears = rawProfileHash.noLightsEncoreClears
+    ? parseInt(rawProfileHash.noLightsEncoreClears, 10)
+    : 0;
+
+  const newGauntletWins = prevGauntletWins + (gauntletVerdict?.won ? 1 : 0);
+  const newFastEncoreClears =
+    prevFastEncoreClears +
+    (encoreActiveForRun && encoreMode === 'fast_tempo' ? 1 : 0);
+  const newNoLightsEncoreClears =
+    prevNoLightsEncoreClears +
+    (encoreActiveForRun && encoreMode === 'no_lights' ? 1 : 0);
 
   const newAttemptsCount = daily.attemptsCount + 1;
   const newClearsCount = daily.clearsCount + (passed ? 1 : 0);
@@ -497,6 +523,28 @@ export async function submitAttempt(
     }
   }
 
+  const nextRelics = [...profile.relics];
+  const unlockedMythicRelics: string[] = [];
+  const forgeMythic = (relicId: string) => {
+    if (!nextRelics.includes(relicId)) {
+      nextRelics.push(relicId);
+      unlockedMythicRelics.push(relicId);
+    }
+  };
+
+  // Earned-Only Mythic Challenge Relics (0% chest RNG)
+  if (passed) {
+    if (accuracy >= 1 && activeRoll <= 12) forgeMythic('grand_crown');
+    if (encoreActiveForRun && activeRoll <= 7) forgeMythic('conservatory_heart');
+    if (activeRoll === 1 && accuracy >= 0.85) forgeMythic('phoenix_plume');
+  }
+  if (newLevel >= 40) forgeMythic('sovereign_octave');
+  if (newStreak >= 14) forgeMythic('astral_board');
+  if (newStreak >= 21) forgeMythic('nebula_comb');
+  if (newGauntletWins >= 3) forgeMythic('celestial_carillon');
+  if (newFastEncoreClears >= 3) forgeMythic('chronos_escapement');
+  if (newNoLightsEncoreClears >= 3) forgeMythic('void_resonator');
+
   const nextFeats = [...profile.feats];
   const unlockedFeats: RareFeat[] = [];
   const grant = (feat: RareFeat) => {
@@ -509,18 +557,27 @@ export async function submitAttempt(
   if (passed) {
     grant('first_tune');
     if (accuracy >= 1) grant('flawless');
+    if (accuracy >= 1 && activeRoll <= 7) grant('flawless_hard');
     if (activeRoll === 1) grant('nat1_clear');
     if (graceUsed) grant('grace_note');
+    if (encoreActiveForRun) grant('encore_champ');
+    if (encoreActiveForRun && encoreMode === 'no_lights' && accuracy >= 0.95) {
+      grant('blind_maestro');
+    }
     if (newStreak >= 3) grant('streak3');
     if (newStreak >= 7) grant('streak7');
+    if (newStreak >= 14) grant('streak14');
     if (newStreak >= 30) grant('streak30');
   }
-  if (newAttemptsCount >= 5) {
-    grant('grinder5');
-  }
-  if (newLevel >= 25) {
-    grant('level25');
-  }
+  if (bountyCompletedXp > 0) grant('bounty_hunter');
+  if (gauntletVerdict?.won) grant('gauntlet_victor');
+  if (newGauntletWins >= 5) grant('gauntlet_champion');
+  if (newAttemptsCount >= 5) grant('grinder5');
+  if (newLevel >= 5) grant('level5');
+  if (newLevel >= 10) grant('level10');
+  if (newLevel >= 25) grant('level25');
+  if (newLevel >= 50) grant('level50');
+  if (unlockedMythicRelics.length > 0) grant('mythic_relic');
 
   const resolvedAvatar = snoovatarUrl ?? profile.snoovatarUrl ?? null;
 
@@ -571,6 +628,10 @@ export async function submitAttempt(
       streakFreezes: String(newStreakFreezes),
       lastPlayedDate: newLastPlayedDate ?? '',
       feats: JSON.stringify(nextFeats),
+      relics: JSON.stringify(nextRelics),
+      gauntletWins: String(newGauntletWins),
+      fastEncoreClears: String(newFastEncoreClears),
+      noLightsEncoreClears: String(newNoLightsEncoreClears),
       ...(resolvedAvatar ? { snoovatarUrl: resolvedAvatar } : {}),
     }),
   ];
@@ -629,6 +690,7 @@ export async function submitAttempt(
     previousLevel,
     unlockedFeat: unlockedFeats[0] ?? null,
     unlockedFeats,
+    ...(unlockedMythicRelics.length > 0 ? { unlockedMythicRelics } : {}),
     ...(noteResults ? { noteResults } : {}),
     profile: {
       username,
@@ -641,7 +703,7 @@ export async function submitAttempt(
       dupePity: profile.dupePity,
       lastPlayedDate: newLastPlayedDate,
       feats: nextFeats,
-      relics: profile.relics,
+      relics: nextRelics,
       selectedVoice: profile.selectedVoice,
       bardAvatar: profile.bardAvatar,
       snoovatarUrl: resolvedAvatar,
@@ -811,70 +873,77 @@ export async function openMysteryChest(
     throw new Error('No unopened Mystery Chest available right now.');
   }
 
-  // Higher rarity odds on bonus (2nd) chest
+  // Higher rarity odds on bonus (2nd) chest — Mythics NEVER drop from random RNG chests!
   const isBonus = newChestsOpened >= 2;
   const r = Math.random();
-  const rarity = isBonus
-    ? r < 0.15
-      ? 'mythic'
-      : r < 0.45
-        ? 'rare'
-        : r < 0.8
-          ? 'uncommon'
-          : 'common'
-    : r < 0.05
-      ? 'mythic'
-      : r < 0.2
-        ? 'rare'
-        : r < 0.5
-          ? 'uncommon'
-          : 'common';
+  const rarity: 'common' | 'uncommon' | 'rare' = isBonus
+    ? r < 0.35
+      ? 'rare'
+      : r < 0.8
+        ? 'uncommon'
+        : 'common'
+    : r < 0.18
+      ? 'rare'
+      : r < 0.5
+        ? 'uncommon'
+        : 'common';
 
-  const pool = RELIC_CATALOG.filter((item) => item.rarity === rarity);
+  const unownedChest = CHEST_RELIC_CATALOG.filter(
+    (item) => !profile.relics.includes(item.id)
+  );
+  const allChestRelicsOwned = unownedChest.length === 0;
+
+  const pool = CHEST_RELIC_CATALOG.filter((item) => item.rarity === rarity);
   let picked =
-    pool[Math.floor(Math.random() * pool.length)] ?? RELIC_CATALOG[0]!;
+    pool[Math.floor(Math.random() * pool.length)] ?? CHEST_RELIC_CATALOG[0]!;
   let isDuplicate = profile.relics.includes(picked.id);
   let pityTriggered = false;
   let milestoneGuaranteed = false;
-  let nextDupePity = isDuplicate ? profile.dupePity + 1 : 0;
+  let nextDupePity =
+    allChestRelicsOwned || !isDuplicate ? 0 : profile.dupePity + 1;
 
-  if (daily.milestoneChestTier) {
-    const unownedAll = RELIC_CATALOG.filter(
-      (item) => !profile.relics.includes(item.id)
-    );
-    const unownedMythic = unownedAll.filter((item) => item.rarity === 'mythic');
+  if (!allChestRelicsOwned && daily.milestoneChestTier) {
+    const unownedRare = unownedChest.filter((item) => item.rarity === 'rare');
     const milestonePool =
-      daily.milestoneChestTier === 'mythic' && unownedMythic.length > 0
-        ? unownedMythic
-        : unownedAll;
+      daily.milestoneChestTier === 'mythic' && unownedRare.length > 0
+        ? unownedRare
+        : unownedChest;
     if (milestonePool.length > 0) {
       picked = milestonePool[Math.floor(Math.random() * milestonePool.length)]!;
       isDuplicate = false;
       milestoneGuaranteed = true;
       nextDupePity = 0;
     }
-  } else if (isDuplicate && nextDupePity >= DUPE_PITY_THRESHOLD) {
-    const unowned = RELIC_CATALOG.filter(
-      (item) => !profile.relics.includes(item.id)
-    );
-    if (unowned.length > 0) {
-      picked = unowned[Math.floor(Math.random() * unowned.length)]!;
-      isDuplicate = false;
-      pityTriggered = true;
-      nextDupePity = 0;
-    }
+  } else if (
+    !allChestRelicsOwned &&
+    isDuplicate &&
+    nextDupePity >= DUPE_PITY_THRESHOLD
+  ) {
+    picked = unownedChest[Math.floor(Math.random() * unownedChest.length)]!;
+    isDuplicate = false;
+    pityTriggered = true;
+    nextDupePity = 0;
   }
 
   const effectiveRarity = picked.rarity;
   const bonusXp = isDuplicate
-    ? effectiveRarity === 'mythic' || effectiveRarity === 'rare'
-      ? 60
-      : 30
+    ? getChestDuplicateXp(effectiveRarity, allChestRelicsOwned)
     : 0;
 
   const nextRelics = isDuplicate
-    ? profile.relics
+    ? [...profile.relics]
     : [...profile.relics, picked.id];
+
+  // Forge collector Mythic Relic (orpheus_lyre) when reaching 50 unique Chest Relics
+  const unlockedMythicRelics: string[] = [];
+  const ownedChestCount = CHEST_RELIC_CATALOG.filter((c) =>
+    nextRelics.includes(c.id)
+  ).length;
+  if (ownedChestCount >= 50 && !nextRelics.includes('orpheus_lyre')) {
+    nextRelics.push('orpheus_lyre');
+    unlockedMythicRelics.push('orpheus_lyre');
+  }
+
   const previousLevel = profile.level;
   const newTotalXp = profile.totalXp + bonusXp;
   const newLevel = getLevelFromXp(newTotalXp);
@@ -895,8 +964,11 @@ export async function openMysteryChest(
   if (nextRelics.length >= 12) grant('voice6');
   if (nextRelics.length >= 15) grant('relic15');
   if (nextRelics.length >= 30) grant('relic30');
-  if (effectiveRarity === 'mythic') grant('mythic_relic');
+  if (unlockedMythicRelics.length > 0) grant('mythic_relic');
+  if (newLevel >= 5) grant('level5');
+  if (newLevel >= 10) grant('level10');
   if (newLevel >= 25) grant('level25');
+  if (newLevel >= 50) grant('level50');
 
   const updates: Promise<unknown>[] = [
     redis.hSet(dKey, {
@@ -940,11 +1012,13 @@ export async function openMysteryChest(
     isDuplicate,
     pityTriggered,
     milestoneGuaranteed,
+    allChestRelicsOwned,
     bonusXp,
     leveledUp,
     previousLevel,
     unlockedFeat: unlockedFeats[0] ?? null,
     unlockedFeats,
+    ...(unlockedMythicRelics.length > 0 ? { unlockedMythicRelics } : {}),
     profile: {
       ...profile,
       relics: nextRelics,
@@ -1059,8 +1133,8 @@ export async function saveBardAvatar(
 }
 
 /**
- * Dev-only helper (invoked strictly on r/lute_roll_dev) to unlock all 48 relics,
- * all 15 feats, all 13 voices/skins, Level 25, 10-day streak, and 2 ready chests.
+ * Dev-only helper (invoked strictly on r/lute_roll_dev) to unlock all 85 relics,
+ * all 25 feats, all 13 voices/skins, Level 50, 30-day streak, and 2 ready chests.
  */
 export async function devUnlockAll(
   playerKey: string,
@@ -1071,8 +1145,8 @@ export async function devUnlockAll(
   const utcDate = getUtcDateKey();
   const allRelics = RELIC_CATALOG.map((r) => r.id);
   const allFeats = FEAT_CATALOG.map((f) => f.id);
-  const targetXp = xpRequiredForLevel(25);
-  const targetLevel = 25;
+  const targetXp = xpRequiredForLevel(50);
+  const targetLevel = 50;
   const targetTitle = getTitleForLevel(targetLevel);
 
   await Promise.all([
@@ -1081,8 +1155,9 @@ export async function devUnlockAll(
       xp: String(targetXp),
       level: String(targetLevel),
       title: targetTitle,
-      streak: '10',
+      streak: '30',
       streakFreezes: '1',
+      dupePity: '0',
       relics: JSON.stringify(allRelics),
       feats: JSON.stringify(allFeats),
     }),

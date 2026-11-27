@@ -16,18 +16,24 @@ import {
 import { formatBardFlairText } from '../src/server/flairService';
 import type { PlayerProfile } from '../src/shared/api';
 import {
+  BARD_COSMETICS,
   BARD_EPITHETS,
   BARD_FAMILIARS,
+  BARD_PORTRAITS,
   DEFAULT_BARD_AVATAR,
   DICE_SKINS,
-  getCosmeticForFeat,
-  getCosmeticForRelic,
   KEYBOARD_SKIN_THEMES,
   NOTE_PARTICLE_SKINS,
   sanitizeBardAvatarConfig,
 } from '../src/shared/cosmetics';
 import { getPerformanceCommentary } from '../src/shared/commentary';
-import { FEAT_CATALOG, RELIC_CATALOG } from '../src/shared/constants';
+import {
+  CHEST_RELIC_CATALOG,
+  FEAT_CATALOG,
+  getChestDuplicateXp,
+  MYTHIC_RELIC_CATALOG,
+  RELIC_CATALOG,
+} from '../src/shared/constants';
 
 function isWhiteKey(midi: number): boolean {
   const pc = midi % 12;
@@ -207,7 +213,7 @@ describe('formatBardFlairText (B8 badge priority)', () => {
   });
 });
 
-describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
+describe('Keyboard Skins, Tiered Bard Portraits, 85 Relics & 25 Feats', () => {
   it('maps every single voice to an instrument-matched keyboard skin', () => {
     for (const voice of KEYBOARD_VOICES) {
       const skin = KEYBOARD_SKIN_THEMES[voice.id];
@@ -216,43 +222,69 @@ describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
     }
   });
 
-  it('maps all 48 relics 1-to-1 to a Bard wearable', () => {
-    assert.equal(RELIC_CATALOG.length, 48);
-    for (const relic of RELIC_CATALOG) {
-      const item = getCosmeticForRelic(relic.id);
-      assert.ok(item, `Relic ${relic.id} (${relic.name}) has no mapped wearable`);
+  it('separates 75 Chest Relics (0% Mythic) from 10 Earned-Only Challenge Mythic Relics', () => {
+    assert.equal(RELIC_CATALOG.length, 85);
+    assert.equal(CHEST_RELIC_CATALOG.length, 75);
+    assert.equal(MYTHIC_RELIC_CATALOG.length, 10);
+    assert.equal(
+      CHEST_RELIC_CATALOG.filter((r) => r.rarity === 'mythic').length,
+      0,
+      'Mythic relics must NEVER appear in the random Mystery Chest pool'
+    );
+    for (const mythic of MYTHIC_RELIC_CATALOG) {
+      assert.equal(mythic.rarity, 'mythic');
+      assert.ok(
+        mythic.challengeHint && mythic.challengeHint.length > 5,
+        `Mythic relic ${mythic.id} must have a challengeHint`
+      );
     }
   });
 
-  it('maps all 15 feats 1-to-1 to a Bard wearable', () => {
-    assert.equal(FEAT_CATALOG.length, 15);
-    for (const feat of FEAT_CATALOG) {
-      const item = getCosmeticForFeat(feat.id);
-      assert.ok(item, `Feat ${feat.id} (${feat.title}) has no mapped wearable`);
-    }
+  it('grants higher rarity-scaled Bonus XP when all chest relics are owned (#43)', () => {
+    assert.equal(getChestDuplicateXp('common', false), 30);
+    assert.equal(getChestDuplicateXp('uncommon', false), 40);
+    assert.equal(getChestDuplicateXp('rare', false), 60);
+    assert.equal(getChestDuplicateXp('common', true), 45);
+    assert.equal(getChestDuplicateXp('uncommon', true), 75);
+    assert.equal(getChestDuplicateXp('rare', true), 120);
+  });
+
+  it('defines 23 tiered pre-built Bard portraits, 25 feats, and 26 stage auras', () => {
+    assert.equal(BARD_PORTRAITS.length, 23);
+    assert.equal(FEAT_CATALOG.length, 25);
+    assert.equal(BARD_COSMETICS.length, 26);
+
+    const starters = BARD_PORTRAITS.filter((p) => p.tier === 'starter');
+    const mythics = BARD_PORTRAITS.filter((p) => p.tier === 'mythic');
+    assert.equal(starters.length, 5);
+    assert.equal(mythics.length, 7);
   });
 
   it('enforces relic and feat unlock rules during avatar sanitization', () => {
     const lockedAttempt = sanitizeBardAvatarConfig(
-      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
+      {
+        portrait: 'realm_sovereign',
+        frame: 'nat20_crit_aura',
+      },
       [],
       []
     );
-    assert.equal(lockedAttempt.hat, DEFAULT_BARD_AVATAR.hat);
-    assert.equal(lockedAttempt.cloak, DEFAULT_BARD_AVATAR.cloak);
+    assert.equal(lockedAttempt.portrait, DEFAULT_BARD_AVATAR.portrait);
     assert.equal(lockedAttempt.frame, DEFAULT_BARD_AVATAR.frame);
 
     const unlockedAttempt = sanitizeBardAvatarConfig(
-      { hat: 'crown_of_keys', cloak: 'virtuoso_cape', frame: 'nat20_crit_aura' },
-      ['grand_crown'],
-      ['level25', 'nat20']
+      {
+        portrait: 'realm_sovereign',
+        frame: 'nat20_crit_aura',
+      },
+      [],
+      ['level50', 'nat20']
     );
-    assert.equal(unlockedAttempt.hat, 'crown_of_keys');
-    assert.equal(unlockedAttempt.cloak, 'virtuoso_cape');
+    assert.equal(unlockedAttempt.portrait, 'realm_sovereign');
     assert.equal(unlockedAttempt.frame, 'nat20_crit_aura');
   });
 
-  it('defines Phase A dice skins, particle skins, and epithets with unlock enforcement', () => {
+  it('defines Phase A dice skins, particle skins, familiars, and epithets with unlock enforcement', () => {
     assert.ok(DICE_SKINS.length >= 5);
     assert.ok(NOTE_PARTICLE_SKINS.length >= 5);
     assert.ok(BARD_EPITHETS.length >= 6);
@@ -284,12 +316,18 @@ describe('Keyboard Skins & Bard Wearables (48 Relics + 15 Feats)', () => {
     assert.equal(unlocked.epithet, 'nat20_magnet');
 
     assert.ok(BARD_FAMILIARS.length >= 7);
-    const baseMale = sanitizeBardAvatarConfig({ portrait: 'base_male', familiar: 'ember_drake' }, [], []);
-    assert.equal(baseMale.portrait, 'base_male');
-    assert.equal(baseMale.familiar, 'none');
+    const drakeLocked = sanitizeBardAvatarConfig(
+      { familiar: 'ember_drake' },
+      [],
+      []
+    );
+    assert.equal(drakeLocked.familiar, 'none');
 
-    const drakeUnlocked = sanitizeBardAvatarConfig({ portrait: 'base_nonbinary', familiar: 'ember_drake' }, [], ['nat1_clear']);
-    assert.equal(drakeUnlocked.portrait, 'base_nonbinary');
+    const drakeUnlocked = sanitizeBardAvatarConfig(
+      { familiar: 'ember_drake' },
+      [],
+      ['nat1_clear']
+    );
     assert.equal(drakeUnlocked.familiar, 'ember_drake');
   });
 

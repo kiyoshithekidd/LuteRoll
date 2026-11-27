@@ -57,19 +57,23 @@ export function TavernGuideModal({ onClose }: TavernGuideModalProps) {
             </h3>
             <ul className="space-y-1">
               <li>
-                🎁 <strong>Mystery &amp; Milestone Chests:</strong> Earn 1 on
-                your first clear + 1 bonus chest for 100% or Nat 20, plus{' '}
-                <strong>Streak Milestone Chests</strong> at Days 3, 7, 14 &amp;
-                30 (guaranteed new/mythic!). Collect <strong>48 Relics</strong>{' '}
-                (3rd duplicate guarantees new) to unlock{' '}
-                <strong>13 voiced instruments &amp; keyboard skins</strong>.
+                🎁 <strong>Mystery Chests &amp; Challenge Mythics:</strong> Earn
+                1 chest on your first clear + 1 bonus chest for 100% or Nat 20,
+                plus <strong>Streak Milestone Chests</strong> at Days 3, 7, 14
+                &amp; 30. Collect <strong>75 Chest Relics</strong> (3rd
+                duplicate guarantees new) to unlock{' '}
+                <strong>13 voiced instruments &amp; keyboard skins</strong>, and
+                forge <strong>10 Earned-Only Mythic Relics</strong> through hard
+                challenges, streaks &amp; high levels (0% chest RNG!).
               </li>
               <li>
                 🎭 <strong>Tavern Vault Cosmetics:</strong> Unlock &amp; equip{' '}
-                <strong>Bard Portraits</strong>, <strong>5 d20 Dice Skins</strong>,{' '}
-                <strong>5 Note-Hit Sparks</strong>, escalating{' '}
-                <strong>Auras</strong>, and <strong>Bard Epithets</strong>{' '}
-                shown on leaderboards &amp; result cards.
+                <strong>23 Tiered Chibi Bard Portraits</strong> (escalating from
+                Starter to Mythic!), <strong>26 Stage Auras</strong>,{' '}
+                <strong>6 Animal Familiars</strong>,{' '}
+                <strong>5 d20 Dice Skins</strong>,{' '}
+                <strong>5 Note-Hit Sparks</strong>, and{' '}
+                <strong>Bard Epithets</strong>.
               </li>
               <li>
                 ⚡ <strong>Encore Challenge Modes:</strong> After your first

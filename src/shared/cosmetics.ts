@@ -1,6 +1,13 @@
 import type { KeyboardVoiceId, RareFeat } from './api';
 
-export type BardCosmeticSlot = 'hat' | 'cloak' | 'prop' | 'frame';
+export type BardCosmeticSlot = 'frame';
+
+export type BardVisualTier =
+  | 'starter'
+  | 'common'
+  | 'uncommon'
+  | 'rare'
+  | 'mythic';
 
 export type BardPortraitId =
   | 'busker'
@@ -8,19 +15,29 @@ export type BardPortraitId =
   | 'base_male'
   | 'base_female'
   | 'base_nonbinary'
+  | 'guild_apprentice'
+  | 'bounty_tracker'
   | 'baroque'
   | 'clockwork'
+  | 'tavern_duelist'
   | 'arcane'
   | 'dragon'
   | 'celesta'
-  | 'astral'
+  | 'encore_virtuoso'
   | 'nat20'
   | 'flawless'
-  | 'brutal';
+  | 'brutal'
+  | 'astral'
+  | 'phoenix_maestro'
+  | 'blind_oracle'
+  | 'storm_virtuoso'
+  | 'realm_sovereign'
+  | 'immortal_sun';
 
 export type BardPortraitMeta = {
   id: BardPortraitId;
   name: string;
+  tier: BardVisualTier;
   subtitle: string;
   unlockRelics?: number;
   unlockRelicId?: string;
@@ -28,20 +45,34 @@ export type BardPortraitMeta = {
 };
 
 export const BARD_PORTRAITS: readonly BardPortraitMeta[] = [
-  { id: 'busker', name: 'Tavern Busker', subtitle: 'Starter • Feathered Cap & Lute', unlockRelics: 0 },
-  { id: 'minstrel', name: 'Hooded Minstrel', subtitle: 'Starter • Candlelit Quill & Scroll', unlockRelics: 0 },
-  { id: 'base_male', name: 'Hearthside Troubadour', subtitle: 'Starter • Male Chibi Bard', unlockRelics: 0 },
-  { id: 'base_female', name: 'Auburn Balladeer', subtitle: 'Starter • Female Chibi Bard', unlockRelics: 0 },
-  { id: 'base_nonbinary', name: 'Silver-Leaf Minstrel', subtitle: 'Starter • Non-Binary Chibi Bard', unlockRelics: 0 },
-  { id: 'baroque', name: 'Baroque Noble', subtitle: '3 Relics or Velvet Bench Pad', unlockRelics: 3, unlockRelicId: 'velvet_bench' },
-  { id: 'clockwork', name: 'Clockwork Tinker', subtitle: '6 Relics or Clockwork Arpeggiator', unlockRelics: 6, unlockRelicId: 'clock_arp' },
-  { id: 'arcane', name: 'Arcane Rune-Weaver', subtitle: '12 Relics or Runic Diapason', unlockRelics: 12, unlockRelicId: 'runic_diapason' },
-  { id: 'dragon', name: 'Dragoncrest Troubadour', subtitle: '18 Relics or Dragonbone Hammer', unlockRelics: 18, unlockRelicId: 'dragon_hammer' },
-  { id: 'celesta', name: 'Starlight Celesta', subtitle: '25 Relics or Crystal Organ Pipe', unlockRelics: 25, unlockRelicId: 'crystal_pipe' },
-  { id: 'astral', name: 'Astral Sovereign', subtitle: 'Mythic Relic or Crown of the Keys', unlockRelicId: 'grand_crown', unlockFeatId: 'mythic_relic' },
-  { id: 'nat20', name: 'Nat 20 Champion', subtitle: 'Feat: Blessed by Fate (Nat 20)', unlockFeatId: 'nat20' },
-  { id: 'flawless', name: 'Golden Ear Virtuoso', subtitle: 'Feat: Golden Ear (100% Clear)', unlockFeatId: 'flawless' },
-  { id: 'brutal', name: 'Brutal Underdog', subtitle: 'Feat: Underdog Encore (Nat 1 Clear)', unlockFeatId: 'nat1_clear' },
+  // === STARTERS (5) ===
+  { id: 'busker', name: 'Tavern Busker', tier: 'starter', subtitle: 'Starter • Feathered Cap & Lute', unlockRelics: 0 },
+  { id: 'minstrel', name: 'Hooded Minstrel', tier: 'starter', subtitle: 'Starter • Candlelit Quill & Scroll', unlockRelics: 0 },
+  { id: 'base_male', name: 'Hearthside Troubadour', tier: 'starter', subtitle: 'Starter • Male Chibi Bard', unlockRelics: 0 },
+  { id: 'base_female', name: 'Auburn Balladeer', tier: 'starter', subtitle: 'Starter • Female Chibi Bard', unlockRelics: 0 },
+  { id: 'base_nonbinary', name: 'Silver-Leaf Minstrel', tier: 'starter', subtitle: 'Starter • Non-Binary Chibi Bard', unlockRelics: 0 },
+  // === COMMON / EARLY PROGRESSION (2) ===
+  { id: 'guild_apprentice', name: 'Apprentice Guild Bard', tier: 'common', subtitle: 'Feat: Apprentice Graduate (Lvl 5)', unlockFeatId: 'level5' },
+  { id: 'bounty_tracker', name: 'Tavern Bounty Hunter', tier: 'common', subtitle: 'Feat: Claim a Daily Bounty', unlockFeatId: 'bounty_hunter' },
+  // === UNCOMMON (3) ===
+  { id: 'baroque', name: 'Baroque Noble', tier: 'uncommon', subtitle: '6 Relics or Velvet Bench Pad', unlockRelics: 6, unlockRelicId: 'velvet_bench' },
+  { id: 'clockwork', name: 'Clockwork Tinker', tier: 'uncommon', subtitle: '10 Relics or Clockwork Arpeggiator', unlockRelics: 10, unlockRelicId: 'clock_arp' },
+  { id: 'tavern_duelist', name: 'Stage Duelist', tier: 'uncommon', subtitle: 'Feat: Win a Bardic Gauntlet', unlockFeatId: 'gauntlet_victor' },
+  // === RARE (6) ===
+  { id: 'arcane', name: 'Arcane Rune-Weaver', tier: 'rare', subtitle: '18 Relics or Runic Diapason', unlockRelics: 18, unlockRelicId: 'runic_diapason' },
+  { id: 'dragon', name: 'Dragoncrest Troubadour', tier: 'rare', subtitle: '25 Relics or Dragonbone Hammer', unlockRelics: 25, unlockRelicId: 'dragon_hammer' },
+  { id: 'celesta', name: 'Starlight Celesta', tier: 'rare', subtitle: '35 Relics or Crystal Organ Pipe', unlockRelics: 35, unlockRelicId: 'crystal_pipe' },
+  { id: 'encore_virtuoso', name: 'Encore Daredevil', tier: 'rare', subtitle: 'Feat: Clear an Encore Mode run', unlockFeatId: 'encore_champ' },
+  { id: 'nat20', name: 'Nat 20 Champion', tier: 'rare', subtitle: 'Feat: Blessed by Fate (Nat 20)', unlockFeatId: 'nat20' },
+  { id: 'flawless', name: 'Golden Ear Virtuoso', tier: 'rare', subtitle: 'Feat: Golden Ear (100% Clear)', unlockFeatId: 'flawless' },
+  // === MYTHIC (7 — Earned-Only Challenges, High Levels & Streaks) ===
+  { id: 'brutal', name: 'Brutal Underdog', tier: 'mythic', subtitle: 'Feat: Underdog Encore (Nat 1 Clear)', unlockFeatId: 'nat1_clear' },
+  { id: 'astral', name: 'Astral Sovereign', tier: 'mythic', subtitle: 'Mythic Relic: Crown of the Keys', unlockRelicId: 'grand_crown', unlockFeatId: 'mythic_relic' },
+  { id: 'phoenix_maestro', name: 'Living Phoenix Maestro', tier: 'mythic', subtitle: 'Mythic Relic: Living Phoenix Plume', unlockRelicId: 'phoenix_plume' },
+  { id: 'blind_oracle', name: 'Blindfold Oracle', tier: 'mythic', subtitle: 'Feat: Blindfold Maestro (95%+ No-Lights)', unlockFeatId: 'blind_maestro' },
+  { id: 'storm_virtuoso', name: 'Virtuoso of the Storm', tier: 'mythic', subtitle: 'Feat: 100% on Very Hard / Brutal', unlockFeatId: 'flawless_hard' },
+  { id: 'realm_sovereign', name: 'Voice of the Realm', tier: 'mythic', subtitle: 'Feat: Reach Bard Level 50', unlockFeatId: 'level50' },
+  { id: 'immortal_sun', name: 'Immortal Sun Sovereign', tier: 'mythic', subtitle: 'Feat: 30-Day Tavern Streak', unlockFeatId: 'streak30' },
 ] as const;
 
 export function isPortraitUnlocked(
@@ -50,7 +81,10 @@ export function isPortraitUnlocked(
   ownedFeats: readonly RareFeat[]
 ): boolean {
   if (portrait.unlockRelics === 0) return true;
-  if (portrait.unlockRelics !== undefined && ownedRelics.length >= portrait.unlockRelics) {
+  if (
+    portrait.unlockRelics !== undefined &&
+    ownedRelics.length >= portrait.unlockRelics
+  ) {
     return true;
   }
   if (portrait.unlockRelicId && ownedRelics.includes(portrait.unlockRelicId)) {
@@ -321,16 +355,12 @@ export function isFamiliarUnlocked(
 
 export type BardAvatarConfig = {
   portrait?: BardPortraitId;
+  frame: string;
   familiar?: BardFamiliarId;
   badgeId?: string | null;
   diceSkin?: DiceSkinId;
   particleSkin?: NoteParticleId;
   epithet?: BardEpithetId;
-  hat: string;
-  cloak: string;
-  prop: string;
-  frame: string;
-  skinTone: string;
   useSnoovatar?: boolean;
 };
 
@@ -338,136 +368,64 @@ export type BardCosmeticItem = {
   id: string;
   slot: BardCosmeticSlot;
   name: string;
+  visualTier: BardVisualTier;
+  shape: 'plain' | 'warm' | 'felt' | 'spark' | 'glow' | 'ring' | 'aura' | 'halo' | 'supernova';
   /** null = not gated by relic; otherwise exact relic ID from RELIC_CATALOG */
   unlockRelicId: string | null;
   /** optional exact feat ID from FEAT_CATALOG */
   unlockFeatId?: RareFeat | null;
   primaryColor: string;
   accentColor: string;
-  shape: string;
 };
-
-export type SkinToneMeta = {
-  id: string;
-  name: string;
-  fill: string;
-  shade: string;
-};
-
-export const BARD_SKIN_TONES: readonly SkinToneMeta[] = [
-  { id: 'porcelain', name: 'Porcelain', fill: '#f6d5be', shade: '#deb092' },
-  { id: 'peach', name: 'Warm Peach', fill: '#e8b896', shade: '#c9906b' },
-  { id: 'tan', name: 'Golden Tan', fill: '#cf966b', shade: '#ad7249' },
-  { id: 'amber', name: 'Rich Amber', fill: '#9f6741', shade: '#7d4c2c' },
-  { id: 'umber', name: 'Deep Umber', fill: '#6b4027', shade: '#4d2b18' },
-] as const;
 
 export const DEFAULT_BARD_AVATAR: BardAvatarConfig = {
   portrait: 'busker',
+  frame: 'candlelit_hearth',
   familiar: 'none',
   badgeId: null,
   diceSkin: 'tavern_gold',
   particleSkin: 'emerald_spark',
   epithet: 'none',
-  hat: 'feathered_cap',
-  cloak: 'forest_green',
-  prop: 'wooden_lute',
-  frame: 'candlelit_hearth',
-  skinTone: 'peach',
   useSnoovatar: false,
 };
 
 /**
- * Base options (unlockRelicId: null & no unlockFeatId)
- * + exact 1-to-1 mapping for all 48 Relics in RELIC_CATALOG
- * + exact 1-to-1 mapping for all 15 Feats in FEAT_CATALOG.
+ * 26 Stage Auras / Frames (4 Starters + 17 Relic-unlocked + 5 Feat-unlocked),
+ * escalating from humble wooden/felt rims up to animated Rare & Mythic halos.
  */
 export const BARD_COSMETICS: readonly BardCosmeticItem[] = [
-  // === HATS (3 base + 12 relic-unlocked + 4 feat-unlocked) ===
-  { id: 'feathered_cap', slot: 'hat', name: 'Feathered Cap', unlockRelicId: null, primaryColor: '#1f5c3e', accentColor: '#ffe875', shape: 'feather' },
-  { id: 'tavern_hood', slot: 'hat', name: 'Tavern Hood', unlockRelicId: null, primaryColor: '#4e2c18', accentColor: '#d4af37', shape: 'hood' },
-  { id: 'bareheaded', slot: 'hat', name: 'Bareheaded', unlockRelicId: null, primaryColor: '#3b2414', accentColor: '#d4af37', shape: 'none' },
-  { id: 'linen_hood', slot: 'hat', name: 'Linen Bard Hood', unlockRelicId: 'linen_cover', primaryColor: '#d8c9aa', accentColor: '#8c6239', shape: 'hood' },
-  { id: 'wax_beret', slot: 'hat', name: 'Crimson Wax Beret', unlockRelicId: 'wax_seal', primaryColor: '#8f1d24', accentColor: '#ffe875', shape: 'beret' },
-  { id: 'tavern_cap', slot: 'hat', name: 'Tavern Regular Cap', unlockRelicId: 'tavern_mug', primaryColor: '#7a4b21', accentColor: '#f5d78e', shape: 'feather' },
-  { id: 'silver_circlet', slot: 'hat', name: 'Silver Octave Circlet', unlockRelicId: 'silver_capo', primaryColor: '#cbd5e1', accentColor: '#38bdf8', shape: 'circlet' },
-  { id: 'velvet_cap', slot: 'hat', name: 'Velvet Troubadour Cap', unlockRelicId: 'velvet_bench', primaryColor: '#581c87', accentColor: '#f59e0b', shape: 'feather' },
-  { id: 'concertina_cap', slot: 'hat', name: 'Folk Concertina Cap', unlockRelicId: 'bellows_strap', primaryColor: '#991b1b', accentColor: '#fef3c7', shape: 'beret' },
-  { id: 'chapel_crown', slot: 'hat', name: 'Chapel Rose Crown', unlockRelicId: 'stained_glass', primaryColor: '#1d4ed8', accentColor: '#fbbf24', shape: 'circlet' },
-  { id: 'moonstone_tiara', slot: 'hat', name: 'Moonstone Tiara', unlockRelicId: 'moon_ring', primaryColor: '#e0f2fe', accentColor: '#38bdf8', shape: 'circlet' },
-  { id: 'dragon_helm', slot: 'hat', name: 'Dragoncrest Helm', unlockRelicId: 'dragon_hammer', primaryColor: '#7f1d1d', accentColor: '#fbbf24', shape: 'wizard' },
-  { id: 'astrolabe_hat', slot: 'hat', name: 'Astrolabe Tricorne', unlockRelicId: 'star_compass', primaryColor: '#1e293b', accentColor: '#facc15', shape: 'tricorne' },
-  { id: 'crown_of_keys', slot: 'hat', name: 'Crown of the Keys', unlockRelicId: 'grand_crown', primaryColor: '#f59e0b', accentColor: '#fffbeb', shape: 'crown' },
-  { id: 'sovereign_diadem', slot: 'hat', name: 'Sovereign Diadem', unlockRelicId: 'sovereign_octave', primaryColor: '#fde047', accentColor: '#a855f7', shape: 'crown' },
-  // Feat Hats
-  { id: 'debut_hat', slot: 'hat', name: 'Debut Busker Cap', unlockRelicId: null, unlockFeatId: 'first_tune', primaryColor: '#92400e', accentColor: '#fde68a', shape: 'beret' },
-  { id: 'golden_laurel', slot: 'hat', name: 'Golden Ear Laurel', unlockRelicId: null, unlockFeatId: 'flawless', primaryColor: '#facc15', accentColor: '#fffbeb', shape: 'circlet' },
-  { id: 'brutal_helm', slot: 'hat', name: 'Brutal Underdog Helm', unlockRelicId: null, unlockFeatId: 'nat1_clear', primaryColor: '#450a0a', accentColor: '#ef4444', shape: 'tricorne' },
-  { id: 'immortal_crown', slot: 'hat', name: 'Immortal Sun Crown', unlockRelicId: null, unlockFeatId: 'streak30', primaryColor: '#fde047', accentColor: '#f97316', shape: 'crown' },
-
-  // === CLOAKS (4 base + 12 relic-unlocked + 4 feat-unlocked) ===
-  { id: 'forest_green', slot: 'cloak', name: 'Forest Green', unlockRelicId: null, primaryColor: '#154731', accentColor: '#d4af37', shape: 'standard' },
-  { id: 'burgundy_wine', slot: 'cloak', name: 'Burgundy Wine', unlockRelicId: null, primaryColor: '#6b1d28', accentColor: '#e5c158', shape: 'standard' },
-  { id: 'tavern_brown', slot: 'cloak', name: 'Tavern Brown', unlockRelicId: null, primaryColor: '#523018', accentColor: '#d4af37', shape: 'standard' },
-  { id: 'midnight_navy', slot: 'cloak', name: 'Midnight Navy', unlockRelicId: null, primaryColor: '#1e2f4d', accentColor: '#93c5fd', shape: 'standard' },
-  { id: 'felt_cloak', slot: 'cloak', name: 'Emerald Felt Cloak', unlockRelicId: 'felt_damper', primaryColor: '#0f5132', accentColor: '#ffe875', shape: 'trim' },
-  { id: 'oakleaf_mantle', slot: 'cloak', name: 'Oakleaf Mantle', unlockRelicId: 'oak_keyslip', primaryColor: '#4d3319', accentColor: '#84cc16', shape: 'trim' },
-  { id: 'songsmith_coat', slot: 'cloak', name: 'Leather Songsmith Coat', unlockRelicId: 'leather_folio', primaryColor: '#3f2514', accentColor: '#f59e0b', shape: 'collared' },
-  { id: 'ebony_coat', slot: 'cloak', name: 'Ebony Formal Coat', unlockRelicId: 'ebony_sharp', primaryColor: '#18181b', accentColor: '#f8fafc', shape: 'collared' },
-  { id: 'minstrel_tabard', slot: 'cloak', name: 'Minstrel Tabard', unlockRelicId: 'tavern_book', primaryColor: '#7c2d12', accentColor: '#fde68a', shape: 'trim' },
-  { id: 'brass_tunic', slot: 'cloak', name: 'Brass-Trimmed Tunic', unlockRelicId: 'reed_plate', primaryColor: '#78350f', accentColor: '#fbbf24', shape: 'collared' },
-  { id: 'velvet_cape', slot: 'cloak', name: 'Velvet Key-Roll Cape', unlockRelicId: 'velvet_case', primaryColor: '#4c1d95', accentColor: '#e9d5ff', shape: 'royal' },
-  { id: 'amber_mantle', slot: 'cloak', name: 'Amber Resonance Mantle', unlockRelicId: 'amber_box', primaryColor: '#b45309', accentColor: '#fef08a', shape: 'royal' },
-  { id: 'sapphire_cloak', slot: 'cloak', name: 'Sapphire Silk Cloak', unlockRelicId: 'sapphire_key', primaryColor: '#1e3a8a', accentColor: '#7dd3fc', shape: 'royal' },
-  { id: 'phoenix_cloak', slot: 'cloak', name: 'Phoenix Ember Cloak', unlockRelicId: 'phoenix_wire', primaryColor: '#991b1b', accentColor: '#fb923c', shape: 'royal' },
-  { id: 'astral_cloak', slot: 'cloak', name: 'Astral Starlight Cloak', unlockRelicId: 'astral_board', primaryColor: '#312e81', accentColor: '#fde047', shape: 'astral' },
-  { id: 'conservatory_robes', slot: 'cloak', name: 'Conservatory Royal Robes', unlockRelicId: 'conservatory_heart', primaryColor: '#7f1d1d', accentColor: '#ffe875', shape: 'astral' },
-  // Feat Cloaks
-  { id: 'legend_ward_mantle', slot: 'cloak', name: "Legend's Ward Mantle", unlockRelicId: null, unlockFeatId: 'streak7', primaryColor: '#0c4a6e', accentColor: '#38bdf8', shape: 'royal' },
-  { id: 'curator_mantle', slot: 'cloak', name: "Curator's Velvet Mantle", unlockRelicId: null, unlockFeatId: 'relic15', primaryColor: '#581c87', accentColor: '#fde047', shape: 'royal' },
-  { id: 'archivist_robes', slot: 'cloak', name: "Archivist's Gilded Robes", unlockRelicId: null, unlockFeatId: 'relic30', primaryColor: '#1e293b', accentColor: '#ffe875', shape: 'astral' },
-  { id: 'virtuoso_cape', slot: 'cloak', name: 'Grand Virtuoso Cape', unlockRelicId: null, unlockFeatId: 'level25', primaryColor: '#7c2d12', accentColor: '#fef08a', shape: 'astral' },
-
-  // === PROPS (2 base + 12 relic-unlocked + 3 feat-unlocked) ===
-  { id: 'wooden_lute', slot: 'prop', name: 'Wooden Lute', unlockRelicId: null, primaryColor: '#b47438', accentColor: '#ffe875', shape: 'lute' },
-  { id: 'quill_scroll', slot: 'prop', name: 'Quill & Scroll', unlockRelicId: null, primaryColor: '#f3e4c3', accentColor: '#d4af37', shape: 'scroll' },
-  { id: 'brass_fork_prop', slot: 'prop', name: 'Brass Tuning Fork', unlockRelicId: 'brass_fork', primaryColor: '#d4af37', accentColor: '#fef08a', shape: 'fork' },
-  { id: 'maple_metro_prop', slot: 'prop', name: 'Maple Metronome', unlockRelicId: 'maple_metro', primaryColor: '#9a5b25', accentColor: '#ffe875', shape: 'metro' },
-  { id: 'pitch_pipe_prop', slot: 'prop', name: 'Tin Pitch Pipe', unlockRelicId: 'pitch_pipe', primaryColor: '#94a3b8', accentColor: '#e2e8f0', shape: 'horn' },
-  { id: 'staff_scroll_prop', slot: 'prop', name: 'Parchment Staff', unlockRelicId: 'staff_scroll', primaryColor: '#fde68a', accentColor: '#92400e', shape: 'scroll' },
-  { id: 'composer_quill', slot: 'prop', name: 'Golden Composer Quill', unlockRelicId: 'quill_nib', primaryColor: '#facc15', accentColor: '#fffbeb', shape: 'quill' },
-  { id: 'copper_lute', slot: 'prop', name: 'Copper-Pegged Lute', unlockRelicId: 'copper_peg', primaryColor: '#c2410c', accentColor: '#fdba74', shape: 'lute' },
-  { id: 'oak_stand_prop', slot: 'prop', name: 'Oak Music Stand', unlockRelicId: 'oak_stand', primaryColor: '#78350f', accentColor: '#fef3c7', shape: 'scroll' },
-  { id: 'bronze_chime_prop', slot: 'prop', name: 'Bronze Bell Chime', unlockRelicId: 'bronze_chime', primaryColor: '#b45309', accentColor: '#fde68a', shape: 'bell' },
-  { id: 'silver_baton_prop', slot: 'prop', name: 'Silver Conductor Baton', unlockRelicId: 'silver_baton', primaryColor: '#e2e8f0', accentColor: '#38bdf8', shape: 'baton' },
-  { id: 'echo_horn_prop', slot: 'prop', name: 'Brass Echo Horn', unlockRelicId: 'echo_horn', primaryColor: '#eab308', accentColor: '#fef9c3', shape: 'horn' },
-  { id: 'clock_arp_prop', slot: 'prop', name: 'Clockwork Arpeggiator', unlockRelicId: 'clock_arp', primaryColor: '#d97706', accentColor: '#38bdf8', shape: 'gear' },
-  { id: 'celestial_bell', slot: 'prop', name: 'Celestial Carillon Bell', unlockRelicId: 'celestial_carillon', primaryColor: '#fde047', accentColor: '#c084fc', shape: 'bell' },
-  // Feat Props
-  { id: 'encore_lute', slot: 'prop', name: 'Encore Gilded Lute', unlockRelicId: null, unlockFeatId: 'grinder5', primaryColor: '#f59e0b', accentColor: '#fffbeb', shape: 'lute' },
-  { id: 'collector_satchel', slot: 'prop', name: "Collector's Relic Gear", unlockRelicId: null, unlockFeatId: 'relic5', primaryColor: '#78350f', accentColor: '#facc15', shape: 'gear' },
-  { id: 'maestro_baton', slot: 'prop', name: "Maestro's Golden Baton", unlockRelicId: null, unlockFeatId: 'voice6', primaryColor: '#fde047', accentColor: '#38bdf8', shape: 'baton' },
-
-  // === FRAMES / AURAS (2 base + 12 relic-unlocked + 4 feat-unlocked) ===
-  { id: 'candlelit_hearth', slot: 'frame', name: 'Candlelit Hearth', unlockRelicId: null, primaryColor: '#2c180b', accentColor: '#d4af37', shape: 'warm' },
-  { id: 'emerald_felt', slot: 'frame', name: 'Emerald Felt', unlockRelicId: null, primaryColor: '#0e3623', accentColor: '#4ade80', shape: 'felt' },
-  { id: 'ivory_gleam', slot: 'frame', name: 'Ivory Gleam Frame', unlockRelicId: 'ivory_keycap', primaryColor: '#3b2b1a', accentColor: '#fffbeb', shape: 'warm' },
-  { id: 'resin_gloss', slot: 'frame', name: 'Resin Gloss Frame', unlockRelicId: 'key_polish', primaryColor: '#451a03', accentColor: '#fbbf24', shape: 'spark' },
-  { id: 'candle_score_aura', slot: 'frame', name: 'Candlelit Score Aura', unlockRelicId: 'candle_sheet', primaryColor: '#431407', accentColor: '#fb923c', shape: 'glow' },
-  { id: 'amber_glow', slot: 'frame', name: 'Warm Amber Glow', unlockRelicId: 'rosin_cake', primaryColor: '#78350f', accentColor: '#fde047', shape: 'glow' },
-  { id: 'copper_trim', slot: 'frame', name: 'Copper Coil Trim', unlockRelicId: 'copper_coil', primaryColor: '#431407', accentColor: '#f97316', shape: 'ring' },
-  { id: 'gilded_trim', slot: 'frame', name: 'Gilded Pedal Trim', unlockRelicId: 'gilded_pedals', primaryColor: '#291b06', accentColor: '#facc15', shape: 'ring' },
-  { id: 'phantom_mist', slot: 'frame', name: 'Phantom Mist Aura', unlockRelicId: 'phantom_pedal', primaryColor: '#1e1b4b', accentColor: '#a78bfa', shape: 'aura' },
-  { id: 'crystal_frost', slot: 'frame', name: 'Crystal Frost Aura', unlockRelicId: 'crystal_pipe', primaryColor: '#0c4a6e', accentColor: '#7dd3fc', shape: 'spark' },
-  { id: 'runic_halo', slot: 'frame', name: 'Runic Arcane Halo', unlockRelicId: 'runic_diapason', primaryColor: '#2e1065', accentColor: '#22d3ee', shape: 'halo' },
-  { id: 'gilded_sunburst', slot: 'frame', name: 'Gilded Sunburst Aura', unlockRelicId: 'gilded_harp', primaryColor: '#451a03', accentColor: '#fde047', shape: 'halo' },
-  { id: 'storm_lightning', slot: 'frame', name: 'Stormglass Lightning', unlockRelicId: 'storm_coil', primaryColor: '#0f172a', accentColor: '#38bdf8', shape: 'aura' },
-  { id: 'chronos_halo', slot: 'frame', name: 'Chronos Golden Halo', unlockRelicId: 'chronos_escapement', primaryColor: '#1c1208', accentColor: '#ffe875', shape: 'halo' },
+  // Starters
+  { id: 'plain_wood', slot: 'frame', name: 'Plain Wooden Rim', visualTier: 'starter', shape: 'plain', unlockRelicId: null, primaryColor: '#26180f', accentColor: '#7c5d41' },
+  { id: 'candlelit_hearth', slot: 'frame', name: 'Candlelit Hearth', visualTier: 'starter', shape: 'warm', unlockRelicId: null, primaryColor: '#2c180b', accentColor: '#d4af37' },
+  { id: 'emerald_felt', slot: 'frame', name: 'Emerald Felt', visualTier: 'starter', shape: 'felt', unlockRelicId: null, primaryColor: '#0e3623', accentColor: '#4ade80' },
+  { id: 'slate_tavern', slot: 'frame', name: 'Dusty Slate Rim', visualTier: 'starter', shape: 'plain', unlockRelicId: null, primaryColor: '#1f242c', accentColor: '#6b7280' },
+  // Common Relics
+  { id: 'ivory_gleam', slot: 'frame', name: 'Ivory Gleam Frame', visualTier: 'common', shape: 'warm', unlockRelicId: 'ivory_keycap', primaryColor: '#3b2b1a', accentColor: '#fffbeb' },
+  { id: 'resin_gloss', slot: 'frame', name: 'Resin Gloss Frame', visualTier: 'common', shape: 'spark', unlockRelicId: 'key_polish', primaryColor: '#451a03', accentColor: '#fbbf24' },
+  { id: 'candle_score_aura', slot: 'frame', name: 'Candlelit Score Glow', visualTier: 'common', shape: 'glow', unlockRelicId: 'candle_sheet', primaryColor: '#431407', accentColor: '#fb923c' },
+  { id: 'amber_glow', slot: 'frame', name: 'Warm Amber Glow', visualTier: 'common', shape: 'glow', unlockRelicId: 'rosin_cake', primaryColor: '#78350f', accentColor: '#fde047' },
+  { id: 'hearth_spark_frame', slot: 'frame', name: 'Hearth Flint Ember', visualTier: 'common', shape: 'spark', unlockRelicId: 'hearth_spark', primaryColor: '#3b1508', accentColor: '#f97316' },
+  // Uncommon Relics
+  { id: 'copper_trim', slot: 'frame', name: 'Copper Coil Ring', visualTier: 'uncommon', shape: 'ring', unlockRelicId: 'copper_coil', primaryColor: '#431407', accentColor: '#f97316' },
+  { id: 'gilded_trim', slot: 'frame', name: 'Gilded Pedal Ring', visualTier: 'uncommon', shape: 'ring', unlockRelicId: 'gilded_pedals', primaryColor: '#291b06', accentColor: '#facc15' },
+  { id: 'emerald_stage_lantern', slot: 'frame', name: 'Emerald Stage Lantern', visualTier: 'uncommon', shape: 'ring', unlockRelicId: 'emerald_lens', primaryColor: '#064e3b', accentColor: '#34d399' },
+  { id: 'silver_chime_aura', slot: 'frame', name: 'Silver Chime Shimmer', visualTier: 'uncommon', shape: 'spark', unlockRelicId: 'silver_chime_ring', primaryColor: '#1e293b', accentColor: '#e2e8f0' },
+  { id: 'velvet_spotlight_aura', slot: 'frame', name: 'Velvet Stage Spotlight', visualTier: 'uncommon', shape: 'glow', unlockRelicId: 'velvet_spotlight', primaryColor: '#4c0519', accentColor: '#fda4af' },
+  // Rare Relics
+  { id: 'phantom_mist', slot: 'frame', name: 'Phantom Mist Aura', visualTier: 'rare', shape: 'aura', unlockRelicId: 'phantom_pedal', primaryColor: '#1e1b4b', accentColor: '#a78bfa' },
+  { id: 'crystal_frost', slot: 'frame', name: 'Crystal Frost Aura', visualTier: 'rare', shape: 'aura', unlockRelicId: 'crystal_pipe', primaryColor: '#0c4a6e', accentColor: '#7dd3fc' },
+  { id: 'runic_halo', slot: 'frame', name: 'Runic Arcane Halo', visualTier: 'rare', shape: 'halo', unlockRelicId: 'runic_diapason', primaryColor: '#2e1065', accentColor: '#22d3ee' },
+  { id: 'gilded_sunburst', slot: 'frame', name: 'Gilded Sunburst Aura', visualTier: 'rare', shape: 'halo', unlockRelicId: 'gilded_harp', primaryColor: '#451a03', accentColor: '#fde047' },
+  { id: 'storm_lightning', slot: 'frame', name: 'Stormglass Lightning', visualTier: 'rare', shape: 'aura', unlockRelicId: 'storm_coil', primaryColor: '#0f172a', accentColor: '#38bdf8' },
+  // Mythic Relics (Earned-Only)
+  { id: 'chronos_halo', slot: 'frame', name: 'Chronos Golden Clock-Halo', visualTier: 'mythic', shape: 'supernova', unlockRelicId: 'chronos_escapement', primaryColor: '#1c1208', accentColor: '#ffe875' },
+  { id: 'void_supernova_halo', slot: 'frame', name: 'Astral Void Supernova', visualTier: 'mythic', shape: 'supernova', unlockRelicId: 'void_resonator', primaryColor: '#09071a', accentColor: '#38bdf8' },
   // Feat Frames
-  { id: 'nat20_crit_aura', slot: 'frame', name: 'Nat 20 Crit Aura', unlockRelicId: null, unlockFeatId: 'nat20', primaryColor: '#422006', accentColor: '#ffe875', shape: 'halo' },
-  { id: 'tavern_flame_aura', slot: 'frame', name: 'Tavern Hearth Flame', unlockRelicId: null, unlockFeatId: 'streak3', primaryColor: '#431407', accentColor: '#fb923c', shape: 'glow' },
-  { id: 'grace_shield_aura', slot: 'frame', name: 'Arcane Grace Shield', unlockRelicId: null, unlockFeatId: 'grace_note', primaryColor: '#082f49', accentColor: '#38bdf8', shape: 'ring' },
-  { id: 'mythic_starburst', slot: 'frame', name: 'Mythic Starburst Halo', unlockRelicId: null, unlockFeatId: 'mythic_relic', primaryColor: '#2e1065', accentColor: '#fde047', shape: 'halo' },
+  { id: 'tavern_flame_aura', slot: 'frame', name: 'Tavern Hearth Flame', visualTier: 'uncommon', shape: 'glow', unlockRelicId: null, unlockFeatId: 'streak3', primaryColor: '#431407', accentColor: '#fb923c' },
+  { id: 'grace_shield_aura', slot: 'frame', name: 'Arcane Grace Shield', visualTier: 'uncommon', shape: 'ring', unlockRelicId: null, unlockFeatId: 'grace_note', primaryColor: '#082f49', accentColor: '#38bdf8' },
+  { id: 'nat20_crit_aura', slot: 'frame', name: 'Nat 20 Golden Crit Aura', visualTier: 'rare', shape: 'halo', unlockRelicId: null, unlockFeatId: 'nat20', primaryColor: '#422006', accentColor: '#ffe875' },
+  { id: 'realm_singer_halo', slot: 'frame', name: 'Voice of the Realm Halo', visualTier: 'mythic', shape: 'supernova', unlockRelicId: null, unlockFeatId: 'level50', primaryColor: '#3b0764', accentColor: '#fde047' },
+  { id: 'mythic_starburst', slot: 'frame', name: 'Mythic Starburst Supernova', visualTier: 'mythic', shape: 'supernova', unlockRelicId: null, unlockFeatId: 'mythic_relic', primaryColor: '#2e1065', accentColor: '#fde047' },
 ] as const;
 
 export function getCosmeticForRelic(relicId: string): BardCosmeticItem | undefined {
@@ -498,17 +456,15 @@ export function sanitizeBardAvatarConfig(
   ownedFeats: readonly RareFeat[] = [],
   streak = 0
 ): BardAvatarConfig {
-  const pickValid = (slot: BardCosmeticSlot, candidate?: string): string => {
-    if (candidate) {
-      const found = BARD_COSMETICS.find(
-        (c) => c.slot === slot && c.id === candidate
-      );
-      if (found && isCosmeticUnlocked(found, ownedRelics, ownedFeats)) {
-        return found.id;
-      }
+  let frame = DEFAULT_BARD_AVATAR.frame;
+  if (input?.frame) {
+    const foundFrame = BARD_COSMETICS.find(
+      (c) => c.slot === 'frame' && c.id === input.frame
+    );
+    if (foundFrame && isCosmeticUnlocked(foundFrame, ownedRelics, ownedFeats)) {
+      frame = foundFrame.id;
     }
-    return DEFAULT_BARD_AVATAR[slot];
-  };
+  }
 
   let portrait: BardPortraitId = 'busker';
   if (input?.portrait) {
@@ -576,22 +532,14 @@ export function sanitizeBardAvatarConfig(
     }
   }
 
-  const validSkin = BARD_SKIN_TONES.some((s) => s.id === input?.skinTone)
-    ? (input!.skinTone as string)
-    : DEFAULT_BARD_AVATAR.skinTone;
-
   return {
     portrait,
+    frame,
     familiar,
     badgeId,
     diceSkin,
     particleSkin,
     epithet,
-    hat: pickValid('hat', input?.hat),
-    cloak: pickValid('cloak', input?.cloak),
-    prop: pickValid('prop', input?.prop),
-    frame: pickValid('frame', input?.frame),
-    skinTone: validSkin,
     useSnoovatar: Boolean(input?.useSnoovatar),
   };
 }
@@ -601,16 +549,10 @@ export type AuraVfxTier = 'base' | 'rare' | 'mythic';
 export function getAuraVfxTier(frameId: string): AuraVfxTier {
   const item = BARD_COSMETICS.find((c) => c.slot === 'frame' && c.id === frameId);
   if (!item) return 'base';
-  if (
-    item.unlockFeatId === 'mythic_relic' ||
-    item.unlockFeatId === 'nat20' ||
-    item.unlockRelicId === 'chronos_escapement' ||
-    item.unlockRelicId === 'gilded_harp' ||
-    item.unlockRelicId === 'runic_diapason'
-  ) {
+  if (item.visualTier === 'mythic' || item.shape === 'supernova') {
     return 'mythic';
   }
-  if (item.shape === 'halo' || item.shape === 'aura' || item.shape === 'ring') {
+  if (item.visualTier === 'rare' || item.shape === 'halo' || item.shape === 'aura') {
     return 'rare';
   }
   return 'base';
