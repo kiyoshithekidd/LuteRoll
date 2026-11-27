@@ -1,12 +1,10 @@
 import { FEAT_CATALOG, RELIC_CATALOG } from '../../shared/constants';
 import {
-  BARD_COSMETICS,
   DEFAULT_BARD_AVATAR,
   getAuraVfxTier,
   type BardAvatarConfig,
-  type BardPortraitId,
 } from '../../shared/cosmetics';
-import { BARD_PORTRAIT_URLS } from '../assets/bardPortraits';
+import { resolveBardPaperDoll } from '../assets/bardLayerAssets';
 
 type BardAvatarProps = {
   config?: BardAvatarConfig | null | undefined;
@@ -51,19 +49,8 @@ export function BardAvatar({
   className = '',
 }: BardAvatarProps) {
   const cfg = config ?? DEFAULT_BARD_AVATAR;
-
-  const frame =
-    BARD_COSMETICS.find((c) => c.slot === 'frame' && c.id === cfg.frame) ??
-    BARD_COSMETICS.find((c) => c.id === DEFAULT_BARD_AVATAR.frame)!;
-
-  const portraitId: BardPortraitId =
-    cfg.portrait && cfg.portrait in BARD_PORTRAIT_URLS
-      ? cfg.portrait
-      : 'busker';
-  const imgSrc =
-    cfg.useSnoovatar && snoovatarUrl
-      ? snoovatarUrl
-      : BARD_PORTRAIT_URLS[portraitId];
+  const resolved = resolveBardPaperDoll(cfg);
+  const { frame, layers } = resolved;
 
   const badgeIcon = resolveBadgeIcon(cfg.badgeId);
   const vfxTier = getAuraVfxTier(frame.id);
@@ -73,6 +60,17 @@ export function BardAvatar({
       : vfxTier === 'rare'
         ? `0 0 13px ${frame.accentColor}cc, 0 2px 6px rgba(0,0,0,0.65)`
         : '0 2px 6px rgba(0,0,0,0.65)';
+
+  const backdropStyle = {
+    background:
+      vfxTier === 'mythic'
+        ? `radial-gradient(circle at 50% 35%, ${frame.accentColor}55 0%, ${frame.primaryColor} 68%, #09050e 100%)`
+        : vfxTier === 'rare'
+          ? `radial-gradient(circle at 50% 38%, ${frame.accentColor}38 0%, ${frame.primaryColor} 76%)`
+          : `radial-gradient(circle at 50% 38%, ${frame.accentColor}1c 0%, ${frame.primaryColor} 82%)`,
+    borderColor: frame.accentColor,
+    boxShadow: glowShadow,
+  };
 
   return (
     <div className={`relative inline-flex shrink-0 ${className}`}>
@@ -93,15 +91,37 @@ export function BardAvatar({
           className="animate-aura-mythic pointer-events-none absolute -inset-1.5 rounded-full border-2 border-dashed opacity-90"
         />
       )}
-      <img
-        src={imgSrc}
-        alt="Bard Avatar"
-        style={{
-          borderColor: frame.accentColor,
-          boxShadow: glowShadow,
-        }}
-        className={`relative ${SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208]`}
-      />
+
+      {cfg.useSnoovatar && snoovatarUrl ? (
+        <img
+          src={snoovatarUrl}
+          alt="Bard Avatar"
+          style={{
+            borderColor: frame.accentColor,
+            boxShadow: glowShadow,
+          }}
+          className={`relative ${SIZE_CLASSES[size]} rounded-full object-cover border-2 bg-[#1c1208]`}
+        />
+      ) : (
+        <div
+          role="img"
+          aria-label="Custom Modular Bard Avatar"
+          style={backdropStyle}
+          className={`relative ${SIZE_CLASSES[size]} rounded-full overflow-hidden border-2 select-none`}
+        >
+          {layers.map((layer) => (
+            <img
+              key={layer.key}
+              src={layer.src}
+              alt=""
+              draggable={false}
+              style={layer.filter ? { filter: layer.filter } : undefined}
+              className="pointer-events-none absolute inset-0 w-full h-full object-contain"
+            />
+          ))}
+        </div>
+      )}
+
       {badgeIcon && (
         <span
           aria-hidden="true"

@@ -51,7 +51,7 @@
       },
       {
         "label": "Unlock All Relics & Feats (Dev)",
-        "description": "Unlock all 48 relics, 15 feats, voices, and Bard wearables on r/lute_roll_dev",
+        "description": "Unlock all 85 relics, 25 feats, voices, and 130 Build-a-Bard wearables on r/lute_roll_dev",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/unlock-all"

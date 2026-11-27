@@ -7,6 +7,7 @@ export type RareFeat =
   | 'nat1_clear'
   | 'streak3'
   | 'streak7'
+  | 'streak14'
   | 'streak30'
   | 'grinder5'
   | 'grace_note'
@@ -15,7 +16,16 @@ export type RareFeat =
   | 'relic30'
   | 'mythic_relic'
   | 'voice6'
-  | 'level25';
+  | 'level5'
+  | 'level10'
+  | 'level25'
+  | 'level50'
+  | 'bounty_hunter'
+  | 'encore_champ'
+  | 'gauntlet_victor'
+  | 'flawless_hard'
+  | 'blind_maestro'
+  | 'gauntlet_champion';
 
 export type RelicRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
 
@@ -111,6 +121,7 @@ export type OpenChestResponse = {
   previousLevel: number;
   unlockedFeat?: RareFeat | null;
   unlockedFeats: RareFeat[];
+  unlockedMythicRelics?: string[];
   profile: PlayerProfile;
   daily: DailyState;
 };
@@ -161,6 +172,7 @@ export type SubmitAttemptResponse = {
   previousLevel: number;
   unlockedFeat: RareFeat | null;
   unlockedFeats: RareFeat[];
+  unlockedMythicRelics?: string[];
   noteResults?: NoteResult[];
   profile: PlayerProfile;
   daily: DailyState;
