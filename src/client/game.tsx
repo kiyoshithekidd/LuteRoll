@@ -1506,13 +1506,15 @@ export const Game = () => {
                             {dropped.name} ({dropped.rarity.toUpperCase()})
                           </p>
                           <p className="text-[11px] text-[#6e4726]">
-                            {chestReveal.isDuplicate
-                              ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
-                              : chestReveal.milestoneGuaranteed
-                                ? `🔥 Milestone Guaranteed! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
-                                : chestReveal.pityTriggered
-                                  ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
-                                  : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
+                            {chestReveal.allChestRelicsOwned
+                              ? `Vault Complete! Rarity Bonus: +${chestReveal.bonusXp} XP`
+                              : chestReveal.isDuplicate
+                                ? `Duplicate: +${chestReveal.bonusXp} XP • Pity ${chestReveal.profile.dupePity}/${DUPE_PITY_THRESHOLD}`
+                                : chestReveal.milestoneGuaranteed
+                                  ? `🔥 Milestone Guaranteed! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                                  : chestReveal.pityTriggered
+                                    ? `✨ Pity Guaranteed New! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`
+                                    : `New Relic! (${chestReveal.profile.relics.length}/${RELIC_CATALOG.length})`}
                           </p>
                           {unlockedWearable && (
                             <p className="text-[10px] font-bold text-[#103524] truncate">

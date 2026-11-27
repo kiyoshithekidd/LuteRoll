@@ -116,6 +116,7 @@ export type OpenChestResponse = {
   isDuplicate: boolean;
   pityTriggered?: boolean;
   milestoneGuaranteed?: boolean;
+  allChestRelicsOwned?: boolean;
   bonusXp: number;
   leveledUp: boolean;
   previousLevel: number;

@@ -523,6 +523,20 @@ export const MYTHIC_RELIC_CATALOG: readonly RelicMeta[] = RELIC_CATALOG.filter(
   (r) => r.source === 'challenge'
 );
 
+export function getChestDuplicateXp(
+  rarity: 'common' | 'uncommon' | 'rare' | 'mythic',
+  allChestRelicsOwned: boolean
+): number {
+  if (allChestRelicsOwned) {
+    if (rarity === 'rare') return 120;
+    if (rarity === 'uncommon') return 75;
+    return 45;
+  }
+  if (rarity === 'rare') return 60;
+  if (rarity === 'uncommon') return 40;
+  return 30;
+}
+
 export type KeyboardVoiceMeta = {
   id:
     | 'grand_piano'

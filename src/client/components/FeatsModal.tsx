@@ -784,7 +784,9 @@ export function FeatsModal({
                   chest RNG).
                 </span>
                 <span className="shrink-0 px-2 py-0.5 rounded-full bg-black/45 border border-[#d4af37]/35 text-[#ffe875] font-bold">
-                  Pity: {profile.dupePity}/{DUPE_PITY_THRESHOLD}
+                  {CHEST_RELIC_CATALOG.every((r) => unlockedRelics.has(r.id))
+                    ? '✨ Vault Complete'
+                    : `Pity: ${profile.dupePity}/${DUPE_PITY_THRESHOLD}`}
                 </span>
               </div>
 

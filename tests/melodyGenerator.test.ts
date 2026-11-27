@@ -30,6 +30,7 @@ import { getPerformanceCommentary } from '../src/shared/commentary';
 import {
   CHEST_RELIC_CATALOG,
   FEAT_CATALOG,
+  getChestDuplicateXp,
   MYTHIC_RELIC_CATALOG,
   RELIC_CATALOG,
 } from '../src/shared/constants';
@@ -237,6 +238,15 @@ describe('Keyboard Skins, Tiered Bard Portraits, 85 Relics & 25 Feats', () => {
         `Mythic relic ${mythic.id} must have a challengeHint`
       );
     }
+  });
+
+  it('grants higher rarity-scaled Bonus XP when all chest relics are owned (#43)', () => {
+    assert.equal(getChestDuplicateXp('common', false), 30);
+    assert.equal(getChestDuplicateXp('uncommon', false), 40);
+    assert.equal(getChestDuplicateXp('rare', false), 60);
+    assert.equal(getChestDuplicateXp('common', true), 45);
+    assert.equal(getChestDuplicateXp('uncommon', true), 75);
+    assert.equal(getChestDuplicateXp('rare', true), 120);
   });
 
   it('defines 23 tiered pre-built Bard portraits, 25 feats, and 26 stage auras', () => {

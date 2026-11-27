@@ -8,6 +8,7 @@ import {
   ENCORE_XP_BONUS_RATE,
   FAIL_ACCURACY_THRESHOLD,
   FEAT_CATALOG,
+  getChestDuplicateXp,
   getDailyBounty,
   getIsoWeekKey,
   getLevelFromXp,
@@ -157,10 +158,14 @@ export async function getPlayerProfile(
   const streakFreezes = data.streakFreezes
     ? parseInt(data.streakFreezes, 10)
     : 0;
-  const dupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
+  const rawDupePity = data.dupePity ? parseInt(data.dupePity, 10) : 0;
   const lastPlayedDate = data.lastPlayedDate || null;
   const feats = parseFeats(data.feats);
   const relics = parseStringArray(data.relics);
+  const allChestOwned = CHEST_RELIC_CATALOG.every((c) => relics.includes(c.id));
+  const dupePity = allChestOwned
+    ? 0
+    : Math.max(0, Math.min(DUPE_PITY_THRESHOLD - 1, rawDupePity));
   const rawVoice = data.selectedVoice as KeyboardVoiceId | undefined;
   const selectedVoice: KeyboardVoiceId =
     rawVoice && KEYBOARD_VOICES.some((v) => v.id === rawVoice)
@@ -883,18 +888,21 @@ export async function openMysteryChest(
         ? 'uncommon'
         : 'common';
 
+  const unownedChest = CHEST_RELIC_CATALOG.filter(
+    (item) => !profile.relics.includes(item.id)
+  );
+  const allChestRelicsOwned = unownedChest.length === 0;
+
   const pool = CHEST_RELIC_CATALOG.filter((item) => item.rarity === rarity);
   let picked =
     pool[Math.floor(Math.random() * pool.length)] ?? CHEST_RELIC_CATALOG[0]!;
   let isDuplicate = profile.relics.includes(picked.id);
   let pityTriggered = false;
   let milestoneGuaranteed = false;
-  let nextDupePity = isDuplicate ? profile.dupePity + 1 : 0;
+  let nextDupePity =
+    allChestRelicsOwned || !isDuplicate ? 0 : profile.dupePity + 1;
 
-  if (daily.milestoneChestTier) {
-    const unownedChest = CHEST_RELIC_CATALOG.filter(
-      (item) => !profile.relics.includes(item.id)
-    );
+  if (!allChestRelicsOwned && daily.milestoneChestTier) {
     const unownedRare = unownedChest.filter((item) => item.rarity === 'rare');
     const milestonePool =
       daily.milestoneChestTier === 'mythic' && unownedRare.length > 0
@@ -906,23 +914,20 @@ export async function openMysteryChest(
       milestoneGuaranteed = true;
       nextDupePity = 0;
     }
-  } else if (isDuplicate && nextDupePity >= DUPE_PITY_THRESHOLD) {
-    const unowned = CHEST_RELIC_CATALOG.filter(
-      (item) => !profile.relics.includes(item.id)
-    );
-    if (unowned.length > 0) {
-      picked = unowned[Math.floor(Math.random() * unowned.length)]!;
-      isDuplicate = false;
-      pityTriggered = true;
-      nextDupePity = 0;
-    }
+  } else if (
+    !allChestRelicsOwned &&
+    isDuplicate &&
+    nextDupePity >= DUPE_PITY_THRESHOLD
+  ) {
+    picked = unownedChest[Math.floor(Math.random() * unownedChest.length)]!;
+    isDuplicate = false;
+    pityTriggered = true;
+    nextDupePity = 0;
   }
 
   const effectiveRarity = picked.rarity;
   const bonusXp = isDuplicate
-    ? effectiveRarity === 'rare'
-      ? 60
-      : 30
+    ? getChestDuplicateXp(effectiveRarity, allChestRelicsOwned)
     : 0;
 
   const nextRelics = isDuplicate
@@ -1007,6 +1012,7 @@ export async function openMysteryChest(
     isDuplicate,
     pityTriggered,
     milestoneGuaranteed,
+    allChestRelicsOwned,
     bonusXp,
     leveledUp,
     previousLevel,
@@ -1151,6 +1157,7 @@ export async function devUnlockAll(
       title: targetTitle,
       streak: '30',
       streakFreezes: '1',
+      dupePity: '0',
       relics: JSON.stringify(allRelics),
       feats: JSON.stringify(allFeats),
     }),
